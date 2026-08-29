@@ -1,0 +1,1 @@
+"""FastAPI Chess Intelligence Application."""

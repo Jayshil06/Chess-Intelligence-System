@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chess-platform"
+version = "0.1.0"
+description = "Chess Intelligence Platform - Data Engineering, Features, ML & NNUE"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "polars>=0.20.0",
+    "numpy>=1.26.0",
+    "pyarrow>=14.0.0",
+    "duckdb>=0.9.0",
+    "scikit-learn>=1.4.0",
+    "scipy>=1.12.0",
+    "plotly>=5.18.0",
+    "chess>=1.10.0"
+]
+
+[project.optional-dependencies]
+ml = [
+    "xgboost>=2.0.0",
+    "torch>=2.2.0"
+]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.3.0",
+    "mypy>=1.9.0"
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["chess_data*", "features*", "analytics*", "models*", "experiments*", "selfplay*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]

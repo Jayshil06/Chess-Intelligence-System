@@ -70,3 +70,8 @@ models/nnue/*
 # OS generated
 .DS_Store
 Thumbs.db
+
+# Agent Prompts and Spec Files
+CODING_AGENT_*.md
+PROJECT_SPEC*.md
+AGENTS.md

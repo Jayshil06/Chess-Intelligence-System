@@ -3,7 +3,7 @@
 [![C++23](https://img.shields.io/badge/C%2B%2B-23-blue.svg?style=flat-square&logo=c%2B%2B)](https://en.cppreference.com/w/cpp/23)
 [![CMake](https://img.shields.io/badge/CMake-3.25%2B-064F8C.svg?style=flat-square&logo=cmake)](https://cmake.org/)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB.svg?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/Tests-100%25%20Passing-brightgreen.svg?style=flat-square)](./engine/tests)
+[![Tests](https://img.shields.io/badge/Tests-28%2F28%20Passing-brightgreen.svg?style=flat-square)](./engine/tests)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](./LICENSE)
 
 A portfolio-grade, high-performance Chess Intelligence System integrating **C++23 systems programming**, **data engineering**, **machine learning baselines**, **NNUE neural evaluation**, **FastAPI microservices**, and an **interactive React dashboard**.
@@ -80,22 +80,22 @@ chess-intelligence/
 ├── engine/                  # C++23 Chess Engine
 │   ├── CMakeLists.txt       # Engine & GoogleTest build target
 │   ├── include/             # C++ Header files
-│   │   ├── board/           # Square, Piece, Color, Bitboard types
-│   │   ├── move/            # Move representation & generation
+│   │   ├── board/           # Square, Piece, Color, Bitboard, Position, FEN
+│   │   ├── move/            # Move representation & attack tables
 │   │   ├── search/          # Alpha-Beta, Iterative Deepening, TT
 │   │   ├── evaluation/      # Classical evaluator
 │   │   ├── protocol/        # UCI protocol handler
 │   │   └── nnue/            # C++ NNUE inference
 │   ├── src/                 # C++ Implementations
-│   │   ├── board/
-│   │   ├── move/
+│   │   ├── board/           # types.cpp, bitboard.cpp, position.cpp, fen.cpp
+│   │   ├── move/            # attacks.cpp
 │   │   ├── search/
 │   │   ├── evaluation/
 │   │   ├── protocol/
 │   │   ├── nnue/
 │   │   └── main.cpp         # Engine CLI executable entry point
 │   └── tests/               # C++ GoogleTest suite
-│       ├── unit/            # Unit tests for types, mapping, bitboards
+│       ├── unit/            # test_types, test_bitboard, test_position, test_fen, test_attacks
 │       ├── perft/           # Perft validation suite
 │       └── search/          # Search benchmarks and tactical tests
 │
@@ -149,7 +149,7 @@ cmake -B build_release -G "Ninja" -DCMAKE_BUILD_TYPE=Release
 cmake --build build_release
 ```
 
-#### 2. Run GoogleTest Suite
+#### 2. Run GoogleTest Suite (28 Tests)
 ```bash
 ctest --test-dir build_release --output-on-failure
 ```
@@ -181,9 +181,13 @@ python python/run_tests.py
 - [x] **Step 1 — Repository Foundation**: Multi-language workspace layout, manifests, and tooling.
 - [x] **Step 2 — C++ Build/Test Infrastructure**: C++23, CMake, Ninja, and GoogleTest automation.
 - [x] **Step 3 — Chess Types & Square Mapping**: 0–63 LERF mapping, Color/PieceType/Piece/Square models, conversion tests.
-- [ ] **Step 4 — Bitboard Foundation**: 64-bit word operations, rank/file masks, popcount, LSB extraction.
-- [ ] **Step 5 — Position Representation**: 12 piece bitboards, occupancy, castling, en-passant, Zobrist hashing.
-- [ ] **Step 6–16 — Move Generation, Make/Unmake & Perft Hard Gate**.
+- [x] **Step 4 — Bitboard Foundation**: 64-bit word operations, rank/file masks, popcount, LSB extraction.
+- [x] **Step 5 — Position Representation**: 12 piece bitboards, occupancy, castling, en-passant, invariant engine.
+- [x] **Step 6 — FEN Parsing and Serialization**: Robust 6-field FEN parser and exact serializer.
+- [x] **Step 7 — Attack Tables: Knight and King**: Compile-time precomputed 64-square non-sliding attack tables.
+- [ ] **Step 8 — Pawn Attack Generation**: White & Black pawn attack masks and en-passant targets.
+- [ ] **Step 9 — Sliding Attack Generation**: Bishop, Rook, Queen ray attacks & blocker handling.
+- [ ] **Step 10–16 — Move Representation, Move Generation, Make/Unmake & Perft Hard Gate**.
 - [ ] **Step 17–25 — Search Algorithms (Alpha-Beta, TT, Move Ordering, UCI, Benchmarks)**.
 - [ ] **Step 26–34 — Python Data Pipeline, Feature Engineering, ML Baselines & PyTorch NNUE**.
 - [ ] **Step 35–38 — FastAPI Service, React Dashboard & Portfolio Release**.

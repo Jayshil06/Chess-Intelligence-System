@@ -150,7 +150,7 @@ cmake -B build_release -G "Ninja" -DCMAKE_BUILD_TYPE=Release
 cmake --build build_release
 ```
 
-#### 2. Run GoogleTest Suite (34 Tests)
+#### 2. Run GoogleTest Suite (48 Tests)
 ```bash
 ctest --test-dir build_release --output-on-failure
 ```
@@ -187,8 +187,9 @@ python python/run_tests.py
 - [x] **Step 6 — FEN Parsing and Serialization**: Robust 6-field FEN parser and exact serializer.
 - [x] **Step 7 — Attack Tables: Knight and King**: Compile-time precomputed 64-square non-sliding attack tables.
 - [x] **Step 8 — Pawn Attack Generation**: White & Black pawn attack masks, pushes, and en-passant targets.
-- [ ] **Step 9 — Sliding Attack Generation**: Bishop, Rook, Queen ray attacks & blocker handling.
-- [ ] **Step 10–16 — Move Representation, Move Generation, Make/Unmake & Perft Hard Gate**.
+- [x] **Step 9 — Sliding Attack Generation**: Bishop, Rook, Queen ray attacks & blocker handling.
+- [x] **Step 10 — Move Representation**: Compact 32-bit packed Move encoding, MoveList, UCI conversions, and ordering.
+- [ ] **Step 11–16 — Move Generation, Make/Unmake & Perft Hard Gate**.
 - [ ] **Step 17–25 — Search Algorithms (Alpha-Beta, TT, Move Ordering, UCI, Benchmarks)**.
 - [ ] **Step 26–34 — Python Data Pipeline, Feature Engineering, ML Baselines & PyTorch NNUE**.
 - [ ] **Step 35–38 — FastAPI Service, React Dashboard & Portfolio Release**.

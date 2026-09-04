@@ -331,3 +331,157 @@ TEST(AttacksTest, EnPassantAttackersAndTargetSquares) {
     EXPECT_EQ(ep_target_square(Square::E2, Color::White), Square::E3);
     EXPECT_EQ(ep_target_square(Square::D7, Color::Black), Square::D6);
 }
+
+TEST(AttacksTest, RookAttacksUnblockedExhaustiveAll64Squares) {
+    EXPECT_EQ(rook_attacks(Square::None), bb::EMPTY);
+
+    for (int i = 0; i < 64; ++i) {
+        Square from = static_cast<Square>(i);
+        Bitboard attacks = rook_attacks(from, bb::EMPTY);
+        int count = bb::popcount(attacks);
+
+        EXPECT_EQ(count, 14);
+        EXPECT_FALSE(bb::test_bit(attacks, from));
+        EXPECT_EQ(ROOK_RAYS[i], attacks);
+
+        Bitboard remaining = attacks;
+        while (remaining) {
+            Square to = bb::pop_lsb(remaining);
+            bool same_rank = square_rank(from) == square_rank(to);
+            bool same_file = square_file(from) == square_file(to);
+            EXPECT_TRUE(same_rank ^ same_file);
+            EXPECT_TRUE(bb::test_bit(rook_attacks(to, bb::EMPTY), from));
+        }
+    }
+
+    Bitboard expected_a1 = (bb::FILE_A | bb::RANK_1) ^ bb::square_mask(Square::A1);
+    EXPECT_EQ(rook_attacks(Square::A1, bb::EMPTY), expected_a1);
+
+    Bitboard expected_d4 = (bb::FILE_D | bb::RANK_4) ^ bb::square_mask(Square::D4);
+    EXPECT_EQ(rook_attacks(Square::D4, bb::EMPTY), expected_d4);
+}
+
+TEST(AttacksTest, RookAttacksWithBlockers) {
+    Square sq = Square::D4;
+
+    Bitboard blockers = bb::square_mask(Square::D6) | bb::square_mask(Square::D2) |
+                        bb::square_mask(Square::F4) | bb::square_mask(Square::B4);
+
+    Bitboard expected = bb::square_mask(Square::D5) | bb::square_mask(Square::D6) |
+                        bb::square_mask(Square::D3) | bb::square_mask(Square::D2) |
+                        bb::square_mask(Square::E4) | bb::square_mask(Square::F4) |
+                        bb::square_mask(Square::C4) | bb::square_mask(Square::B4);
+
+    Bitboard attacks = rook_attacks(sq, blockers);
+    EXPECT_EQ(attacks, expected);
+    EXPECT_EQ(bb::popcount(attacks), 8);
+
+    Bitboard immediate_blockers = bb::square_mask(Square::D5) | bb::square_mask(Square::D3) |
+                                  bb::square_mask(Square::E4) | bb::square_mask(Square::C4);
+    Bitboard immediate_attacks = rook_attacks(sq, immediate_blockers);
+    EXPECT_EQ(immediate_attacks, immediate_blockers);
+    EXPECT_EQ(bb::popcount(immediate_attacks), 4);
+}
+
+TEST(AttacksTest, BishopAttacksUnblockedExhaustiveAll64Squares) {
+    EXPECT_EQ(bishop_attacks(Square::None), bb::EMPTY);
+
+    for (int i = 0; i < 64; ++i) {
+        Square from = static_cast<Square>(i);
+        Bitboard attacks = bishop_attacks(from, bb::EMPTY);
+        int count = bb::popcount(attacks);
+
+        EXPECT_GE(count, 7);
+        EXPECT_LE(count, 13);
+        EXPECT_FALSE(bb::test_bit(attacks, from));
+        EXPECT_EQ(BISHOP_RAYS[i], attacks);
+
+        Bitboard remaining = attacks;
+        while (remaining) {
+            Square to = bb::pop_lsb(remaining);
+            int df = std::abs(static_cast<int>(square_file(from)) - static_cast<int>(square_file(to)));
+            int dr = std::abs(static_cast<int>(square_rank(from)) - static_cast<int>(square_rank(to)));
+            EXPECT_EQ(df, dr);
+            EXPECT_TRUE(bb::test_bit(bishop_attacks(to, bb::EMPTY), from));
+        }
+    }
+
+    EXPECT_EQ(bb::popcount(bishop_attacks(Square::A1, bb::EMPTY)), 7);
+    EXPECT_EQ(bb::popcount(bishop_attacks(Square::H1, bb::EMPTY)), 7);
+    EXPECT_EQ(bb::popcount(bishop_attacks(Square::A8, bb::EMPTY)), 7);
+    EXPECT_EQ(bb::popcount(bishop_attacks(Square::H8, bb::EMPTY)), 7);
+    EXPECT_EQ(bb::popcount(bishop_attacks(Square::D4, bb::EMPTY)), 13);
+    EXPECT_EQ(bb::popcount(bishop_attacks(Square::E5, bb::EMPTY)), 13);
+}
+
+TEST(AttacksTest, BishopAttacksWithBlockers) {
+    Square sq = Square::D4;
+
+    Bitboard blockers = bb::square_mask(Square::F6) | bb::square_mask(Square::B6) |
+                        bb::square_mask(Square::F2) | bb::square_mask(Square::B2);
+
+    Bitboard expected = bb::square_mask(Square::E5) | bb::square_mask(Square::F6) |
+                        bb::square_mask(Square::C5) | bb::square_mask(Square::B6) |
+                        bb::square_mask(Square::E3) | bb::square_mask(Square::F2) |
+                        bb::square_mask(Square::C3) | bb::square_mask(Square::B2);
+
+    Bitboard attacks = bishop_attacks(sq, blockers);
+    EXPECT_EQ(attacks, expected);
+    EXPECT_EQ(bb::popcount(attacks), 8);
+
+    Bitboard immediate_blockers = bb::square_mask(Square::E5) | bb::square_mask(Square::C5) |
+                                  bb::square_mask(Square::E3) | bb::square_mask(Square::C3);
+    Bitboard immediate_attacks = bishop_attacks(sq, immediate_blockers);
+    EXPECT_EQ(immediate_attacks, immediate_blockers);
+    EXPECT_EQ(bb::popcount(immediate_attacks), 4);
+}
+
+TEST(AttacksTest, QueenAttacksUnblockedAndWithBlockers) {
+    EXPECT_EQ(queen_attacks(Square::None), bb::EMPTY);
+
+    for (int i = 0; i < 64; ++i) {
+        Square sq = static_cast<Square>(i);
+        Bitboard expected = bishop_attacks(sq, bb::EMPTY) | rook_attacks(sq, bb::EMPTY);
+        EXPECT_EQ(queen_attacks(sq, bb::EMPTY), expected);
+        EXPECT_EQ(QUEEN_RAYS[i], expected);
+    }
+
+    EXPECT_EQ(bb::popcount(queen_attacks(Square::A1, bb::EMPTY)), 21);
+    EXPECT_EQ(bb::popcount(queen_attacks(Square::D4, bb::EMPTY)), 27);
+
+    Square sq = Square::D4;
+    Bitboard blockers = bb::square_mask(Square::D6) | bb::square_mask(Square::D2) |
+                        bb::square_mask(Square::F4) | bb::square_mask(Square::B4) |
+                        bb::square_mask(Square::F6) | bb::square_mask(Square::B6) |
+                        bb::square_mask(Square::F2) | bb::square_mask(Square::B2);
+
+    Bitboard expected_blocked = rook_attacks(sq, blockers) | bishop_attacks(sq, blockers);
+    EXPECT_EQ(queen_attacks(sq, blockers), expected_blocked);
+    EXPECT_EQ(bb::popcount(queen_attacks(sq, blockers)), 16);
+}
+
+TEST(AttacksTest, SlidingAttacksGenericDispatchAndBitboardAggregates) {
+    Square sq = Square::D4;
+    Bitboard blockers = bb::square_mask(Square::D6) | bb::square_mask(Square::F6);
+
+    EXPECT_EQ(sliding_attacks(PieceType::Bishop, sq, blockers), bishop_attacks(sq, blockers));
+    EXPECT_EQ(sliding_attacks(PieceType::Rook, sq, blockers), rook_attacks(sq, blockers));
+    EXPECT_EQ(sliding_attacks(PieceType::Queen, sq, blockers), queen_attacks(sq, blockers));
+    EXPECT_EQ(sliding_attacks(PieceType::Knight, sq, blockers), bb::EMPTY);
+
+    EXPECT_EQ(attacks_by_type(PieceType::Knight, sq, blockers), knight_attacks(sq));
+    EXPECT_EQ(attacks_by_type(PieceType::King, sq, blockers), king_attacks(sq));
+    EXPECT_EQ(attacks_by_type(PieceType::Pawn, sq, blockers, Color::White), white_pawn_attacks(sq));
+    EXPECT_EQ(attacks_by_type(PieceType::Bishop, sq, blockers), bishop_attacks(sq, blockers));
+    EXPECT_EQ(attacks_by_type(PieceType::Rook, sq, blockers), rook_attacks(sq, blockers));
+    EXPECT_EQ(attacks_by_type(PieceType::Queen, sq, blockers), queen_attacks(sq, blockers));
+
+    Bitboard rooks = bb::square_mask(Square::A1) | bb::square_mask(Square::H8);
+    EXPECT_EQ(rook_attacks_from_bb(rooks, blockers), rook_attacks(Square::A1, blockers) | rook_attacks(Square::H8, blockers));
+
+    Bitboard bishops = bb::square_mask(Square::C1) | bb::square_mask(Square::F1);
+    EXPECT_EQ(bishop_attacks_from_bb(bishops, blockers), bishop_attacks(Square::C1, blockers) | bishop_attacks(Square::F1, blockers));
+
+    Bitboard queens = bb::square_mask(Square::D1);
+    EXPECT_EQ(queen_attacks_from_bb(queens, blockers), queen_attacks(Square::D1, blockers));
+}

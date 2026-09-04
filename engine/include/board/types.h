@@ -129,6 +129,10 @@ constexpr Color flip_color(Color c) {
     return Color::None;
 }
 
+constexpr Color operator~(Color c) {
+    return flip_color(c);
+}
+
 constexpr Piece make_piece(Color color, PieceType type) {
     if (color == Color::None || type == PieceType::None) {
         return Piece::None;

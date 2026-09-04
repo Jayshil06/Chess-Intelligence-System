@@ -4,6 +4,7 @@
 [![CMake](https://img.shields.io/badge/CMake-3.25%2B-064F8C.svg?style=flat-square&logo=cmake)](https://cmake.org/)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB.svg?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![Tests](https://img.shields.io/badge/Tests-28%2F28%20Passing-brightgreen.svg?style=flat-square)](./engine/tests)
+[![Contributions Welcome](https://img.shields.io/badge/Contributions-Welcome-brightgreen.svg?style=flat-square)](https://github.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](./LICENSE)
 
 A portfolio-grade, high-performance Chess Intelligence System integrating **C++23 systems programming**, **data engineering**, **machine learning baselines**, **NNUE neural evaluation**, **FastAPI microservices**, and an **interactive React dashboard**.
@@ -149,7 +150,7 @@ cmake -B build_release -G "Ninja" -DCMAKE_BUILD_TYPE=Release
 cmake --build build_release
 ```
 
-#### 2. Run GoogleTest Suite (28 Tests)
+#### 2. Run GoogleTest Suite (34 Tests)
 ```bash
 ctest --test-dir build_release --output-on-failure
 ```
@@ -185,12 +186,24 @@ python python/run_tests.py
 - [x] **Step 5 — Position Representation**: 12 piece bitboards, occupancy, castling, en-passant, invariant engine.
 - [x] **Step 6 — FEN Parsing and Serialization**: Robust 6-field FEN parser and exact serializer.
 - [x] **Step 7 — Attack Tables: Knight and King**: Compile-time precomputed 64-square non-sliding attack tables.
-- [ ] **Step 8 — Pawn Attack Generation**: White & Black pawn attack masks and en-passant targets.
+- [x] **Step 8 — Pawn Attack Generation**: White & Black pawn attack masks, pushes, and en-passant targets.
 - [ ] **Step 9 — Sliding Attack Generation**: Bishop, Rook, Queen ray attacks & blocker handling.
 - [ ] **Step 10–16 — Move Representation, Move Generation, Make/Unmake & Perft Hard Gate**.
 - [ ] **Step 17–25 — Search Algorithms (Alpha-Beta, TT, Move Ordering, UCI, Benchmarks)**.
 - [ ] **Step 26–34 — Python Data Pipeline, Feature Engineering, ML Baselines & PyTorch NNUE**.
 - [ ] **Step 35–38 — FastAPI Service, React Dashboard & Portfolio Release**.
+
+---
+
+## 🤝 Contributing
+
+Open-source contributors are warmly welcomed! Whether it's optimization, bug fixes, algorithmic improvements, or documentation enhancements:
+
+1. **Fork the Project**
+2. **Create your Feature Branch** (`git checkout -b feat/AmazingFeature`)
+3. **Commit your Changes** (`git commit -m 'feat: add some AmazingFeature'`)
+4. **Push to the Branch** (`git push origin feat/AmazingFeature`)
+5. **Open a Pull Request**
 
 ---
 

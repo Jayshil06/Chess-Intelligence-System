@@ -1,4 +1,7 @@
 #include "board/position.h"
+#include "board/zobrist.h"
+#include "move/attacks.h"
+#include "move/movegen.h"
 #include <algorithm>
 
 namespace chess {
@@ -25,6 +28,8 @@ void Position::clear() {
     m_en_passant_square = Square::None;
     m_halfmove_clock = 0;
     m_fullmove_number = 1;
+    m_history.clear();
+    m_zobrist_hash = 0ULL;
 }
 
 void Position::reset_to_starting_position() {
@@ -53,6 +58,7 @@ void Position::reset_to_starting_position() {
     m_en_passant_square = Square::None;
     m_halfmove_clock = 0;
     m_fullmove_number = 1;
+    recalculate_hash();
 }
 
 Bitboard Position::piece_bb(Piece p) const noexcept {
@@ -239,6 +245,10 @@ bool Position::validate_invariants() const noexcept {
     return true;
 }
 
+void Position::recalculate_hash() noexcept {
+    m_zobrist_hash = zobrist::compute_hash(*this);
+}
+
 bool Position::operator==(const Position& other) const noexcept {
     return m_pieces == other.m_pieces &&
            m_occupancy_color == other.m_occupancy_color &&
@@ -247,7 +257,150 @@ bool Position::operator==(const Position& other) const noexcept {
            m_castling_rights == other.m_castling_rights &&
            m_en_passant_square == other.m_en_passant_square &&
            m_halfmove_clock == other.m_halfmove_clock &&
-           m_fullmove_number == other.m_fullmove_number;
+           m_fullmove_number == other.m_fullmove_number &&
+           m_zobrist_hash == other.m_zobrist_hash;
+}
+
+void Position::make_move(Move m, UndoState& undo) noexcept {
+    undo.move = m;
+    undo.castling_rights = m_castling_rights;
+    undo.en_passant_square = m_en_passant_square;
+    undo.halfmove_clock = m_halfmove_clock;
+    undo.zobrist_hash = m_zobrist_hash;
+
+    Square from = m.from();
+    Square to = m.to();
+    Piece moving_piece = piece_at(from);
+    PieceType moving_type = type_of(moving_piece);
+
+    if (m.is_en_passant()) {
+        undo.captured_piece = make_piece(~m_side_to_move, PieceType::Pawn);
+    } else if (m.is_capture()) {
+        undo.captured_piece = piece_at(to);
+    } else {
+        undo.captured_piece = Piece::None;
+    }
+
+    m_zobrist_hash ^= zobrist::castling_key(m_castling_rights);
+    if (m_en_passant_square != Square::None) {
+        m_zobrist_hash ^= zobrist::en_passant_key(m_en_passant_square);
+    }
+
+    if (moving_type == PieceType::Pawn || m.is_capture()) {
+        m_halfmove_clock = 0;
+    } else {
+        m_halfmove_clock++;
+    }
+
+    if (m_side_to_move == Color::Black) {
+        m_fullmove_number++;
+    }
+
+    m_en_passant_square = Square::None;
+    if (m.is_double_push()) {
+        m_en_passant_square = attacks::ep_target_square(from, m_side_to_move);
+        m_zobrist_hash ^= zobrist::en_passant_key(m_en_passant_square);
+    }
+
+    update_castling_rights(from, to);
+    m_zobrist_hash ^= zobrist::castling_key(m_castling_rights);
+
+    if (m.is_en_passant()) {
+        Square ep_cap_sq = attacks::pawn_ep_captured_square(to, m_side_to_move);
+        remove_piece(ep_cap_sq);
+        m_zobrist_hash ^= zobrist::piece_key(undo.captured_piece, ep_cap_sq);
+
+        move_piece(from, to);
+        m_zobrist_hash ^= zobrist::piece_key(moving_piece, from);
+        m_zobrist_hash ^= zobrist::piece_key(moving_piece, to);
+    } else if (m.is_castling()) {
+        move_piece(from, to);
+        m_zobrist_hash ^= zobrist::piece_key(moving_piece, from);
+        m_zobrist_hash ^= zobrist::piece_key(moving_piece, to);
+
+        Square rook_from = castling_rook_from(to);
+        Square rook_to = castling_rook_to(to);
+        Piece rook = piece_at(rook_from);
+        move_piece(rook_from, rook_to);
+        m_zobrist_hash ^= zobrist::piece_key(rook, rook_from);
+        m_zobrist_hash ^= zobrist::piece_key(rook, rook_to);
+    } else {
+        if (m.is_capture()) {
+            remove_piece(to);
+            m_zobrist_hash ^= zobrist::piece_key(undo.captured_piece, to);
+        }
+        move_piece(from, to);
+        m_zobrist_hash ^= zobrist::piece_key(moving_piece, from);
+        m_zobrist_hash ^= zobrist::piece_key(moving_piece, to);
+
+        if (m.is_promotion()) {
+            Piece promo_piece = make_piece(m_side_to_move, m.promotion_type());
+            put_piece(promo_piece, to);
+            m_zobrist_hash ^= zobrist::piece_key(moving_piece, to);
+            m_zobrist_hash ^= zobrist::piece_key(promo_piece, to);
+        }
+    }
+
+    m_side_to_move = ~m_side_to_move;
+    m_zobrist_hash ^= zobrist::side_key();
+}
+
+void Position::unmake_move(const UndoState& undo) noexcept {
+    m_side_to_move = ~m_side_to_move;
+
+    if (m_side_to_move == Color::Black) {
+        m_fullmove_number--;
+    }
+
+    m_halfmove_clock = undo.halfmove_clock;
+    m_castling_rights = undo.castling_rights;
+    m_en_passant_square = undo.en_passant_square;
+    m_zobrist_hash = undo.zobrist_hash;
+
+    const Move& m = undo.move;
+    Square from = m.from();
+    Square to = m.to();
+
+    if (m.is_en_passant()) {
+        move_piece(to, from);
+        Square ep_cap_sq = attacks::pawn_ep_captured_square(to, m_side_to_move);
+        put_piece(undo.captured_piece, ep_cap_sq);
+    } else if (m.is_castling()) {
+        move_piece(to, from);
+        Square rook_from = castling_rook_from(to);
+        Square rook_to = castling_rook_to(to);
+        move_piece(rook_to, rook_from);
+    } else if (m.is_promotion()) {
+        remove_piece(to);
+        put_piece(make_piece(m_side_to_move, PieceType::Pawn), from);
+        if (undo.captured_piece != Piece::None) {
+            put_piece(undo.captured_piece, to);
+        }
+    } else {
+        move_piece(to, from);
+        if (undo.captured_piece != Piece::None) {
+            put_piece(undo.captured_piece, to);
+        }
+    }
+}
+
+bool Position::make_move(Move m) noexcept {
+    UndoState undo;
+    make_move(m, undo);
+    if (is_in_check(*this, ~m_side_to_move)) {
+        unmake_move(undo);
+        return false;
+    }
+    m_history.push_back(undo);
+    return true;
+}
+
+bool Position::unmake_move() noexcept {
+    if (m_history.empty()) return false;
+    UndoState undo = m_history.back();
+    m_history.pop_back();
+    unmake_move(undo);
+    return true;
 }
 
 } // namespace chess

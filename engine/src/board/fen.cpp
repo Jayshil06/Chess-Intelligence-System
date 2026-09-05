@@ -141,6 +141,7 @@ std::optional<Position> parse(std::string_view fen_str) {
         return std::nullopt;
     }
 
+    pos.recalculate_hash();
     return pos;
 }
 

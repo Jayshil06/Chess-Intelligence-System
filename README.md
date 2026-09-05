@@ -150,7 +150,7 @@ cmake -B build_release -G "Ninja" -DCMAKE_BUILD_TYPE=Release
 cmake --build build_release
 ```
 
-#### 2. Run GoogleTest Suite (48 Tests)
+#### 2. Run GoogleTest Suite (78 Tests)
 ```bash
 ctest --test-dir build_release --output-on-failure
 ```
@@ -189,7 +189,12 @@ python python/run_tests.py
 - [x] **Step 8 — Pawn Attack Generation**: White & Black pawn attack masks, pushes, and en-passant targets.
 - [x] **Step 9 — Sliding Attack Generation**: Bishop, Rook, Queen ray attacks & blocker handling.
 - [x] **Step 10 — Move Representation**: Compact 32-bit packed Move encoding, MoveList, UCI conversions, and ordering.
-- [ ] **Step 11–16 — Move Generation, Make/Unmake & Perft Hard Gate**.
+- [x] **Step 11 — Pseudo-Legal Move Generation**: Modular generation for all piece types, promotions, captures, and castling paths.
+- [x] **Step 12 — Castling & En-Passant State**: Kingside/Queenside paths, branchless castling rights updates, and EP state handling.
+- [x] **Step 13 — Check Detection & Legal Move Filtering**: Attacked-square detection, pinned pieces, check evasions, and checkmate/stalemate.
+- [x] **Step 14 — Make/Unmake Move**: Stack-based state restoration, incremental updates, and 1000-sequence verification.
+- [x] **Step 15 — Zobrist Hashing**: 64-bit compile-time keys, incremental XOR updates on make/unmake, and collision verification.
+- [ ] **Step 16 — Perft Test Suite (Hard Gate)**.
 - [ ] **Step 17–25 — Search Algorithms (Alpha-Beta, TT, Move Ordering, UCI, Benchmarks)**.
 - [ ] **Step 26–34 — Python Data Pipeline, Feature Engineering, ML Baselines & PyTorch NNUE**.
 - [ ] **Step 35–38 — FastAPI Service, React Dashboard & Portfolio Release**.

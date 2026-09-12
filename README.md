@@ -150,7 +150,7 @@ cmake -B build_release -G "Ninja" -DCMAKE_BUILD_TYPE=Release
 cmake --build build_release
 ```
 
-#### 2. Run GoogleTest Suite (78 Tests)
+#### 2. Run GoogleTest Suite (94 Tests)
 ```bash
 ctest --test-dir build_release --output-on-failure
 ```
@@ -179,25 +179,13 @@ python python/run_tests.py
 
 ## 🗺️ Implementation Roadmap
 
-- [x] **Step 1 — Repository Foundation**: Multi-language workspace layout, manifests, and tooling.
-- [x] **Step 2 — C++ Build/Test Infrastructure**: C++23, CMake, Ninja, and GoogleTest automation.
-- [x] **Step 3 — Chess Types & Square Mapping**: 0–63 LERF mapping, Color/PieceType/Piece/Square models, conversion tests.
-- [x] **Step 4 — Bitboard Foundation**: 64-bit word operations, rank/file masks, popcount, LSB extraction.
-- [x] **Step 5 — Position Representation**: 12 piece bitboards, occupancy, castling, en-passant, invariant engine.
-- [x] **Step 6 — FEN Parsing and Serialization**: Robust 6-field FEN parser and exact serializer.
-- [x] **Step 7 — Attack Tables: Knight and King**: Compile-time precomputed 64-square non-sliding attack tables.
-- [x] **Step 8 — Pawn Attack Generation**: White & Black pawn attack masks, pushes, and en-passant targets.
-- [x] **Step 9 — Sliding Attack Generation**: Bishop, Rook, Queen ray attacks & blocker handling.
-- [x] **Step 10 — Move Representation**: Compact 32-bit packed Move encoding, MoveList, UCI conversions, and ordering.
-- [x] **Step 11 — Pseudo-Legal Move Generation**: Modular generation for all piece types, promotions, captures, and castling paths.
-- [x] **Step 12 — Castling & En-Passant State**: Kingside/Queenside paths, branchless castling rights updates, and EP state handling.
-- [x] **Step 13 — Check Detection & Legal Move Filtering**: Attacked-square detection, pinned pieces, check evasions, and checkmate/stalemate.
-- [x] **Step 14 — Make/Unmake Move**: Stack-based state restoration, incremental updates, and 1000-sequence verification.
-- [x] **Step 15 — Zobrist Hashing**: 64-bit compile-time keys, incremental XOR updates on make/unmake, and collision verification.
-- [ ] **Step 16 — Perft Test Suite (Hard Gate)**.
-- [ ] **Step 17–25 — Search Algorithms (Alpha-Beta, TT, Move Ordering, UCI, Benchmarks)**.
-- [ ] **Step 26–34 — Python Data Pipeline, Feature Engineering, ML Baselines & PyTorch NNUE**.
-- [ ] **Step 35–38 — FastAPI Service, React Dashboard & Portfolio Release**.
+- [x] **Steps 1–6 — Board & State Foundation**: Multi-language workspace, C++23 build, square mapping, bitboards, position state, and FEN parsing.
+- [x] **Steps 7–10 — Attack Tables & Move Encoding**: King/Knight/Pawn/Sliding attack generation and compact 32-bit Move encoding.
+- [x] **Steps 11–16 — Movegen, State Transitions & Perft Hard Gate**: Legal move filtering, castling/EP state, make/unmake, Zobrist hashing, and verified Perft test suite.
+- [x] **Steps 17–20 — Evaluation & Search Core**: Classical material/PST evaluation, Negamax, Alpha-Beta pruning, Quiescence, and Iterative Deepening.
+- [ ] **Steps 21–25 — Search Optimizations & UCI Protocol**: Transposition Table, move ordering heuristics, UCI protocol handler, and engine benchmarks.
+- [ ] **Steps 26–34 — Python Data Platform, ML Baselines & PyTorch NNUE**: PGN pipeline, feature engineering, analytics, ML baselines, and NNUE training.
+- [ ] **Steps 35–38 — FastAPI Service, React Dashboard & Portfolio Release**: Web microservice, interactive UI, self-play ELO evaluation, and portfolio release.
 
 ---
 

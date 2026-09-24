@@ -20,6 +20,7 @@ Position::Position(bool set_startpos) {
 
 void Position::clear() {
     m_pieces.fill(bb::EMPTY);
+    m_board.fill(Piece::None);
     m_occupancy_color.fill(bb::EMPTY);
     m_occupancy_all = bb::EMPTY;
 
@@ -85,15 +86,7 @@ Bitboard Position::empty_squares() const noexcept {
 }
 
 Piece Position::piece_at(Square sq) const noexcept {
-    if (!is_valid_square(sq) || !bb::test_bit(m_occupancy_all, sq)) {
-        return Piece::None;
-    }
-    for (size_t i = 0; i < NUM_PIECES; ++i) {
-        if (bb::test_bit(m_pieces[i], sq)) {
-            return static_cast<Piece>(i);
-        }
-    }
-    return Piece::None;
+    return is_valid_square(sq) ? m_board[static_cast<size_t>(sq)] : Piece::None;
 }
 
 Color Position::color_at(Square sq) const noexcept {
@@ -116,6 +109,7 @@ void Position::put_piece(Piece p, Square sq) noexcept {
 
     size_t piece_idx = static_cast<size_t>(p);
     bb::set_bit(m_pieces[piece_idx], sq);
+    m_board[static_cast<size_t>(sq)] = p;
 
     Color c = color_of(p);
     bb::set_bit(m_occupancy_color[static_cast<size_t>(c)], sq);
@@ -123,18 +117,13 @@ void Position::put_piece(Piece p, Square sq) noexcept {
 }
 
 void Position::remove_piece(Square sq) noexcept {
-    if (!is_valid_square(sq) || !bb::test_bit(m_occupancy_all, sq)) return;
+    Piece p = piece_at(sq);
+    if (p == Piece::None) return;
 
-    for (size_t i = 0; i < NUM_PIECES; ++i) {
-        if (bb::test_bit(m_pieces[i], sq)) {
-            bb::clear_bit(m_pieces[i], sq);
-            break;
-        }
-    }
-
-    bb::clear_bit(m_occupancy_color[static_cast<size_t>(Color::White)], sq);
-    bb::clear_bit(m_occupancy_color[static_cast<size_t>(Color::Black)], sq);
+    bb::clear_bit(m_pieces[static_cast<size_t>(p)], sq);
+    bb::clear_bit(m_occupancy_color[static_cast<size_t>(color_of(p))], sq);
     bb::clear_bit(m_occupancy_all, sq);
+    m_board[static_cast<size_t>(sq)] = Piece::None;
 }
 
 void Position::move_piece(Square from, Square to) noexcept {
@@ -166,6 +155,13 @@ void Position::update_occupancies() noexcept {
 
     m_occupancy_all = m_occupancy_color[static_cast<size_t>(Color::White)] |
                       m_occupancy_color[static_cast<size_t>(Color::Black)];
+
+    m_board.fill(Piece::None);
+    for (size_t p = 0; p < NUM_PIECES; ++p) {
+        for (Bitboard b = m_pieces[p]; b;) {
+            m_board[static_cast<size_t>(bb::pop_lsb(b))] = static_cast<Piece>(p);
+        }
+    }
 }
 
 bool Position::validate_invariants() const noexcept {
@@ -385,12 +381,9 @@ void Position::unmake_move(const UndoState& undo) noexcept {
 }
 
 bool Position::make_move(Move m) noexcept {
+    if (!is_legal_move(*this, m)) return false;
     UndoState undo;
     make_move(m, undo);
-    if (is_in_check(*this, ~m_side_to_move)) {
-        unmake_move(undo);
-        return false;
-    }
     m_history.push_back(undo);
     return true;
 }

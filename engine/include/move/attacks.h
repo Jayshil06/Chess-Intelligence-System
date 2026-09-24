@@ -8,62 +8,52 @@
 namespace chess {
 namespace attacks {
 
+namespace detail {
+
+// Directions 0-3 move toward higher square indices, 4-7 toward lower ones.
+enum Direction : int { North, East, NorthEast, NorthWest, South, West, SouthEast, SouthWest };
+constexpr int DIR_FILE[8] = {0, 1, 1, -1, 0, -1, 1, -1};
+constexpr int DIR_RANK[8] = {1, 0, 1, 1, -1, 0, -1, -1};
+
+consteval std::array<std::array<Bitboard, NUM_SQUARES>, 8> init_rays() {
+    std::array<std::array<Bitboard, NUM_SQUARES>, 8> rays{};
+    for (int d = 0; d < 8; ++d) {
+        for (int sq = 0; sq < NUM_SQUARES; ++sq) {
+            for (int f = sq % 8 + DIR_FILE[d], r = sq / 8 + DIR_RANK[d];
+                 f >= 0 && f < 8 && r >= 0 && r < 8; f += DIR_FILE[d], r += DIR_RANK[d]) {
+                rays[d][sq] |= 1ULL << (r * 8 + f);
+            }
+        }
+    }
+    return rays;
+}
+
+inline constexpr auto RAYS = init_rays();
+
+// Ray attacks up to and including the nearest blocker.
+constexpr Bitboard ray_attacks(int dir, size_t sq, Bitboard blockers) noexcept {
+    Bitboard ray = RAYS[dir][sq];
+    if (Bitboard b = ray & blockers) {
+        int nearest = dir < South ? std::countr_zero(b) : 63 - std::countl_zero(b);
+        ray ^= RAYS[dir][nearest];
+    }
+    return ray;
+}
+
+} // namespace detail
+
 constexpr Bitboard rook_attacks(Square sq, Bitboard blockers = bb::EMPTY) noexcept {
     if (!is_valid_square(sq)) return bb::EMPTY;
-    Bitboard attacks = bb::EMPTY;
-    int f = static_cast<int>(square_file(sq));
-    int r = static_cast<int>(square_rank(sq));
-
-    for (int nr = r + 1; nr < 8; ++nr) {
-        Square target = make_square(static_cast<File>(f), static_cast<Rank>(nr));
-        attacks |= (1ULL << static_cast<uint8_t>(target));
-        if (blockers & (1ULL << static_cast<uint8_t>(target))) break;
-    }
-    for (int nr = r - 1; nr >= 0; --nr) {
-        Square target = make_square(static_cast<File>(f), static_cast<Rank>(nr));
-        attacks |= (1ULL << static_cast<uint8_t>(target));
-        if (blockers & (1ULL << static_cast<uint8_t>(target))) break;
-    }
-    for (int nf = f + 1; nf < 8; ++nf) {
-        Square target = make_square(static_cast<File>(nf), static_cast<Rank>(r));
-        attacks |= (1ULL << static_cast<uint8_t>(target));
-        if (blockers & (1ULL << static_cast<uint8_t>(target))) break;
-    }
-    for (int nf = f - 1; nf >= 0; --nf) {
-        Square target = make_square(static_cast<File>(nf), static_cast<Rank>(r));
-        attacks |= (1ULL << static_cast<uint8_t>(target));
-        if (blockers & (1ULL << static_cast<uint8_t>(target))) break;
-    }
-    return attacks;
+    size_t s = static_cast<size_t>(sq);
+    return detail::ray_attacks(detail::North, s, blockers) | detail::ray_attacks(detail::East, s, blockers) |
+           detail::ray_attacks(detail::South, s, blockers) | detail::ray_attacks(detail::West, s, blockers);
 }
 
 constexpr Bitboard bishop_attacks(Square sq, Bitboard blockers = bb::EMPTY) noexcept {
     if (!is_valid_square(sq)) return bb::EMPTY;
-    Bitboard attacks = bb::EMPTY;
-    int f = static_cast<int>(square_file(sq));
-    int r = static_cast<int>(square_rank(sq));
-
-    for (int nr = r + 1, nf = f + 1; nr < 8 && nf < 8; ++nr, ++nf) {
-        Square target = make_square(static_cast<File>(nf), static_cast<Rank>(nr));
-        attacks |= (1ULL << static_cast<uint8_t>(target));
-        if (blockers & (1ULL << static_cast<uint8_t>(target))) break;
-    }
-    for (int nr = r + 1, nf = f - 1; nr < 8 && nf >= 0; ++nr, --nf) {
-        Square target = make_square(static_cast<File>(nf), static_cast<Rank>(nr));
-        attacks |= (1ULL << static_cast<uint8_t>(target));
-        if (blockers & (1ULL << static_cast<uint8_t>(target))) break;
-    }
-    for (int nr = r - 1, nf = f + 1; nr >= 0 && nf < 8; --nr, ++nf) {
-        Square target = make_square(static_cast<File>(nf), static_cast<Rank>(nr));
-        attacks |= (1ULL << static_cast<uint8_t>(target));
-        if (blockers & (1ULL << static_cast<uint8_t>(target))) break;
-    }
-    for (int nr = r - 1, nf = f - 1; nr >= 0 && nf >= 0; --nr, --nf) {
-        Square target = make_square(static_cast<File>(nf), static_cast<Rank>(nr));
-        attacks |= (1ULL << static_cast<uint8_t>(target));
-        if (blockers & (1ULL << static_cast<uint8_t>(target))) break;
-    }
-    return attacks;
+    size_t s = static_cast<size_t>(sq);
+    return detail::ray_attacks(detail::NorthEast, s, blockers) | detail::ray_attacks(detail::NorthWest, s, blockers) |
+           detail::ray_attacks(detail::SouthEast, s, blockers) | detail::ray_attacks(detail::SouthWest, s, blockers);
 }
 
 constexpr Bitboard queen_attacks(Square sq, Bitboard blockers = bb::EMPTY) noexcept {

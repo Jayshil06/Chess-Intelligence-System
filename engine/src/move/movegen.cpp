@@ -394,22 +394,28 @@ bool is_legal_move(const Position& pos, Move m) noexcept {
         return is_castling_legal(pos, m.flag());
     }
 
-    Position next = pos;
-    if (m.is_en_passant()) {
-        Square cap_sq = attacks::pawn_ep_captured_square(m.to(), us);
-        next.remove_piece(cap_sq);
-        next.move_piece(m.from(), m.to());
-    } else {
-        if (m.is_capture()) {
-            next.remove_piece(m.to());
-        }
-        next.move_piece(m.from(), m.to());
-        if (m.is_promotion()) {
-            next.put_piece(make_piece(us, m.promotion_type()), m.to());
-        }
-    }
+    // Evaluate king safety on the post-move occupancy without copying the position
+    Color them = ~us;
+    Bitboard from_bb = bb::square_mask(m.from());
+    Bitboard to_bb = bb::square_mask(m.to());
+    Bitboard captured = m.is_en_passant()
+        ? bb::square_mask(attacks::pawn_ep_captured_square(m.to(), us))
+        : to_bb & pos.color_occupancy(them);
+    Bitboard occ = (pos.all_occupancy() ^ from_bb ^ captured) | to_bb;
 
-    return !is_in_check(next, us);
+    Bitboard king = pos.piece_bb(us, PieceType::King);
+    if (!king) return true;
+    Square ksq = (king & from_bb) ? m.to() : bb::lsb(king);
+
+    Bitboard queens = pos.piece_bb(them, PieceType::Queen);
+    Bitboard attackers =
+        (attacks::pawn_attacks(us, ksq) & pos.piece_bb(them, PieceType::Pawn)) |
+        (attacks::knight_attacks(ksq) & pos.piece_bb(them, PieceType::Knight)) |
+        (attacks::king_attacks(ksq) & pos.piece_bb(them, PieceType::King)) |
+        (attacks::bishop_attacks(ksq, occ) & (pos.piece_bb(them, PieceType::Bishop) | queens)) |
+        (attacks::rook_attacks(ksq, occ) & (pos.piece_bb(them, PieceType::Rook) | queens));
+
+    return (attackers & ~captured) == bb::EMPTY;
 }
 
 void generate_legal_moves(const Position& pos, MoveList& list, MoveGenType type) {

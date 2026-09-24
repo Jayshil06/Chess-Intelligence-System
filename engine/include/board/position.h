@@ -128,6 +128,7 @@ private:
     void update_occupancies() noexcept;
 
     std::array<Bitboard, NUM_PIECES> m_pieces{};
+    std::array<Piece, NUM_SQUARES> m_board{};
     std::array<Bitboard, NUM_COLORS> m_occupancy_color{};
     Bitboard m_occupancy_all{bb::EMPTY};
 

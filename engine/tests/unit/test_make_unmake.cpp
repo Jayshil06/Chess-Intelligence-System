@@ -107,7 +107,7 @@ TEST(MakeUnmakeTest, CastlingRoundTrip) {
 }
 
 TEST(MakeUnmakeTest, PromotionAndPromotionCaptureRoundTrip) {
-    auto parsed = fen::parse("r1b1k2r/pppp1Ppp/8/8/8/8/PPPP2PP/RNBQKBNR w KQkq - 0 1");
+    auto parsed = fen::parse("r1bk3r/pppp1Ppp/8/8/8/8/PPPP2PP/RNBQKBNR w KQ - 0 1");
     ASSERT_TRUE(parsed.has_value());
     Position pos = *parsed;
     Position initial = pos;
@@ -126,7 +126,7 @@ TEST(MakeUnmakeTest, PromotionAndPromotionCaptureRoundTrip) {
     EXPECT_TRUE(pos.validate_invariants());
 
     // Promotion capture
-    auto parsed2 = fen::parse("r1bqk2r/pppp1Ppp/8/8/8/8/PPPP2PP/RNBQKBNR w KQkq - 0 1");
+    auto parsed2 = fen::parse("r1bkq2r/pppp1Ppp/8/8/8/8/PPPP2PP/RNBQKBNR w KQ - 0 1");
     ASSERT_TRUE(parsed2.has_value());
     pos = *parsed2;
     initial = pos;
@@ -135,13 +135,13 @@ TEST(MakeUnmakeTest, PromotionAndPromotionCaptureRoundTrip) {
     pos.make_move(m_promo_cap, undo);
     EXPECT_EQ(pos.piece_at(Square::F7), Piece::None);
     EXPECT_EQ(pos.piece_at(Square::E8), Piece::WhiteKnight);
-    EXPECT_EQ(undo.captured_piece, Piece::BlackKing);
+    EXPECT_EQ(undo.captured_piece, Piece::BlackQueen);
     EXPECT_TRUE(pos.validate_invariants());
 
     pos.unmake_move(undo);
     EXPECT_EQ(pos, initial);
     EXPECT_EQ(pos.piece_at(Square::F7), Piece::WhitePawn);
-    EXPECT_EQ(pos.piece_at(Square::E8), Piece::BlackKing);
+    EXPECT_EQ(pos.piece_at(Square::E8), Piece::BlackQueen);
     EXPECT_TRUE(pos.validate_invariants());
 }
 

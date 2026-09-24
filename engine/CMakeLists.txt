@@ -5,7 +5,6 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
-set(CMAKE_TLS_VERIFY OFF)
 
 # Common compiler warnings
 if(MSVC)
@@ -35,6 +34,9 @@ target_include_directories(chess_core PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
+find_package(Threads REQUIRED)
+target_link_libraries(chess_core PUBLIC Threads::Threads)
+
 # Engine CLI / UCI executable
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp")
     add_executable(chess_engine "${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp")
@@ -47,7 +49,8 @@ if(BUILD_TESTING)
     FetchContent_Declare(
         googletest
         URL https://github.com/google/googletest/archive/refs/tags/v1.15.2.zip
-        TLS_VERIFY OFF
+        URL_HASH SHA256=f179ec217f9b3b3f3c6e8b02d3e7eda997b49e4ce26d6b235c9053bec9c0bf9f
+        FIND_PACKAGE_ARGS NAMES GTest
     )
     # For Windows: prevent overriding the parent project's compiler/linker settings
     set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)

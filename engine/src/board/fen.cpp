@@ -1,4 +1,5 @@
 #include "board/fen.h"
+#include "move/movegen.h"
 #include <sstream>
 #include <vector>
 #include <cctype>
@@ -105,8 +106,13 @@ std::optional<Position> parse(std::string_view fen_str) {
         }
         Square ep_sq = sq_opt.value();
         Rank ep_rank = square_rank(ep_sq);
-        // Valid en-passant rank must be rank 3 (white target) or rank 6 (black target)
-        if (ep_rank != Rank::Rank3 && ep_rank != Rank::Rank6) {
+        // Target must be behind a pawn that just double-pushed for the side not to move,
+        // with the target and the pawn's origin square both empty
+        Color us = pos.side_to_move();
+        Square origin = attacks::pawn_ep_captured_square(ep_sq, ~us);
+        if (ep_rank != (us == Color::White ? Rank::Rank6 : Rank::Rank3) ||
+            pos.piece_at(attacks::pawn_ep_captured_square(ep_sq, us)) != make_piece(~us, PieceType::Pawn) ||
+            pos.piece_at(ep_sq) != Piece::None || pos.piece_at(origin) != Piece::None) {
             return std::nullopt;
         }
         pos.set_en_passant_square(ep_sq);
@@ -116,7 +122,7 @@ std::optional<Position> parse(std::string_view fen_str) {
     if (tokens.size() >= 5) {
         int halfmove = 0;
         auto res = std::from_chars(tokens[4].data(), tokens[4].data() + tokens[4].size(), halfmove);
-        if (res.ec != std::errc() || halfmove < 0 || res.ptr != tokens[4].data() + tokens[4].size()) {
+        if (res.ec != std::errc() || halfmove < 0 || halfmove > UINT16_MAX || res.ptr != tokens[4].data() + tokens[4].size()) {
             return std::nullopt;
         }
         pos.set_halfmove_clock(static_cast<uint16_t>(halfmove));
@@ -128,13 +134,28 @@ std::optional<Position> parse(std::string_view fen_str) {
     if (tokens.size() >= 6) {
         int fullmove = 0;
         auto res = std::from_chars(tokens[5].data(), tokens[5].data() + tokens[5].size(), fullmove);
-        if (res.ec != std::errc() || fullmove <= 0 || res.ptr != tokens[5].data() + tokens[5].size()) {
+        if (res.ec != std::errc() || fullmove <= 0 || fullmove > UINT16_MAX || res.ptr != tokens[5].data() + tokens[5].size()) {
             return std::nullopt;
         }
         pos.set_fullmove_number(static_cast<uint16_t>(fullmove));
     } else {
         pos.set_fullmove_number(1);
     }
+
+    // Exactly one king per side, and the side that just moved cannot be left in check
+    if (bb::popcount(pos.piece_bb(Piece::WhiteKing)) != 1 || bb::popcount(pos.piece_bb(Piece::BlackKing)) != 1 ||
+        is_in_check(pos, ~pos.side_to_move())) {
+        return std::nullopt;
+    }
+
+    // Drop castling rights whose king or rook is not on its home square
+    if (pos.piece_at(Square::E1) != Piece::WhiteKing) cr &= ~Castling::WhiteAll;
+    if (pos.piece_at(Square::H1) != Piece::WhiteRook) cr &= ~Castling::WhiteOO;
+    if (pos.piece_at(Square::A1) != Piece::WhiteRook) cr &= ~Castling::WhiteOOO;
+    if (pos.piece_at(Square::E8) != Piece::BlackKing) cr &= ~Castling::BlackAll;
+    if (pos.piece_at(Square::H8) != Piece::BlackRook) cr &= ~Castling::BlackOO;
+    if (pos.piece_at(Square::A8) != Piece::BlackRook) cr &= ~Castling::BlackOOO;
+    pos.set_castling_rights(cr);
 
     // Validate structural invariants
     if (!pos.validate_invariants()) {

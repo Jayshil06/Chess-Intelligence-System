@@ -81,3 +81,28 @@ TEST(FenTest, SafeRejectionOfInvalidFENs) {
         EXPECT_FALSE(pos_opt.has_value()) << "Should have rejected invalid FEN: " << bad_fen;
     }
 }
+
+TEST(FenTest, RejectsIllegalPositions) {
+    const std::vector<std::string> illegal_fens = {
+        "8/8/8/8/8/8/8/K7 w - - 0 1",                                  // Missing black king
+        "k7/8/8/8/8/8/8/KK6 w - - 0 1",                                // Two white kings
+        "4k3/8/8/8/8/8/8/4R1K1 w - - 0 1",                             // Side not to move is in check
+        "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e3 0 1", // EP target on wrong side
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq e3 0 1",   // EP without a double-pushed pawn
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 70000 1", // Halfmove overflows 16 bits
+        "4k3/8/8/8/3pP3/4N3/8/4K3 b - e3 0 1",                         // EP target square occupied
+        "4k3/8/8/8/3pP3/8/4N3/4K3 b - e3 0 1"                          // EP pawn origin occupied
+    };
+    for (const auto& bad_fen : illegal_fens) {
+        EXPECT_FALSE(fen::parse(bad_fen).has_value()) << "Accepted illegal FEN: " << bad_fen;
+    }
+    EXPECT_TRUE(fen::parse("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1").has_value());
+}
+
+TEST(FenTest, SanitizesInconsistentCastlingRights) {
+    // White king has left e1 and the h8 rook is gone: only black queen-side castling survives
+    auto pos = fen::parse("r3k3/8/8/8/8/8/8/R4K1R w KQkq - 0 1");
+    ASSERT_TRUE(pos.has_value());
+    EXPECT_EQ(pos->castling_rights(), Castling::BlackOOO);
+    EXPECT_EQ(fen::to_string(*pos), "r3k3/8/8/8/8/8/8/R4K1R w q - 0 1");
+}

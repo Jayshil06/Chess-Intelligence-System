@@ -1,4 +1,5 @@
 #include "evaluation/evaluate.h"
+#include <algorithm>
 
 namespace chess {
 namespace eval {
@@ -72,6 +73,29 @@ constexpr std::array<int, 64> KING_PST = {
     -30, -40, -40, -50, -50, -40, -40, -30
 };
 
+// Endgame king table: centralize once material comes off
+constexpr std::array<int, 64> KING_EG_PST = {
+    -50, -30, -30, -30, -30, -30, -30, -50,
+    -30, -30,   0,   0,   0,   0, -30, -30,
+    -30, -10,  20,  30,  30,  20, -10, -30,
+    -30, -10,  30,  40,  40,  30, -10, -30,
+    -30, -10,  30,  40,  40,  30, -10, -30,
+    -30, -10,  20,  30,  30,  20, -10, -30,
+    -30, -20, -10,   0,   0, -10, -20, -30,
+    -50, -40, -30, -20, -20, -30, -40, -50
+};
+
+constexpr int MAX_PHASE = 24;
+
+// Game phase from non-pawn material: 24 = opening, 0 = bare endgame
+int game_phase(const Position& pos) noexcept {
+    int phase = bb::popcount(pos.piece_bb(Piece::WhiteKnight) | pos.piece_bb(Piece::BlackKnight) |
+                             pos.piece_bb(Piece::WhiteBishop) | pos.piece_bb(Piece::BlackBishop)) +
+                2 * bb::popcount(pos.piece_bb(Piece::WhiteRook) | pos.piece_bb(Piece::BlackRook)) +
+                4 * bb::popcount(pos.piece_bb(Piece::WhiteQueen) | pos.piece_bb(Piece::BlackQueen));
+    return std::min(phase, MAX_PHASE);
+}
+
 inline int pst_value(PieceType pt, Square sq, Color c) noexcept {
     Square rel_sq = relative_square(c, sq);
     size_t idx = static_cast<size_t>(rel_sq);
@@ -100,13 +124,20 @@ int evaluate_material(const Position& pos, Color c) noexcept {
 
 int evaluate_pst(const Position& pos, Color c) noexcept {
     int score = 0;
-    for (size_t pt = 0; pt < 6; ++pt) {
+    for (size_t pt = 0; pt < 5; ++pt) {
         PieceType type = static_cast<PieceType>(pt);
         Bitboard b = pos.piece_bb(c, type);
         while (b) {
             Square sq = bb::pop_lsb(b);
             score += pst_value(type, sq, c);
         }
+    }
+
+    Bitboard king = pos.piece_bb(c, PieceType::King);
+    if (king) {
+        size_t idx = static_cast<size_t>(relative_square(c, bb::lsb(king)));
+        int phase = game_phase(pos);
+        score += (KING_PST[idx] * phase + KING_EG_PST[idx] * (MAX_PHASE - phase)) / MAX_PHASE;
     }
     return score;
 }

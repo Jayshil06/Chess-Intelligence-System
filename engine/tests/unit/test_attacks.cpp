@@ -15,10 +15,8 @@ TEST(AttacksTest, KnightAttacksExhaustiveAll64Squares) {
         // Knight attack count must be 2, 3, 4, 6, or 8
         EXPECT_TRUE(count == 2 || count == 3 || count == 4 || count == 6 || count == 8);
 
-        // Cannot attack own square
         EXPECT_FALSE(bb::test_bit(attacks, from));
 
-        // Test every attacked square
         Bitboard remaining = attacks;
         while (remaining) {
             Square to = bb::pop_lsb(remaining);
@@ -58,10 +56,8 @@ TEST(AttacksTest, KingAttacksExhaustiveAll64Squares) {
         // King attack count must be 3 (corners), 5 (edges), or 8 (interior)
         EXPECT_TRUE(count == 3 || count == 5 || count == 8);
 
-        // Cannot attack own square
         EXPECT_FALSE(bb::test_bit(attacks, from));
 
-        // Test every attacked square
         Bitboard remaining = attacks;
         while (remaining) {
             Square to = bb::pop_lsb(remaining);
@@ -129,10 +125,8 @@ TEST(AttacksTest, WhitePawnAttacksExhaustiveAll64Squares) {
             EXPECT_EQ(count, 2);
         }
 
-        // Cannot attack own square
         EXPECT_FALSE(bb::test_bit(attacks, from));
 
-        // Test every attacked square
         Bitboard remaining = attacks;
         while (remaining) {
             Square to = bb::pop_lsb(remaining);
@@ -148,7 +142,6 @@ TEST(AttacksTest, WhitePawnAttacksExhaustiveAll64Squares) {
         }
     }
 
-    // Specific square verifications
     EXPECT_EQ(white_pawn_attacks(Square::A2), bb::square_mask(Square::B3));
     EXPECT_EQ(white_pawn_attacks(Square::H2), bb::square_mask(Square::G3));
     EXPECT_EQ(white_pawn_attacks(Square::E4), bb::square_mask(Square::D5) | bb::square_mask(Square::F5));
@@ -180,10 +173,8 @@ TEST(AttacksTest, BlackPawnAttacksExhaustiveAll64Squares) {
             EXPECT_EQ(count, 2);
         }
 
-        // Cannot attack own square
         EXPECT_FALSE(bb::test_bit(attacks, from));
 
-        // Test every attacked square
         Bitboard remaining = attacks;
         while (remaining) {
             Square to = bb::pop_lsb(remaining);
@@ -199,7 +190,6 @@ TEST(AttacksTest, BlackPawnAttacksExhaustiveAll64Squares) {
         }
     }
 
-    // Specific square verifications
     EXPECT_EQ(black_pawn_attacks(Square::A7), bb::square_mask(Square::B6));
     EXPECT_EQ(black_pawn_attacks(Square::H7), bb::square_mask(Square::G6));
     EXPECT_EQ(black_pawn_attacks(Square::E5), bb::square_mask(Square::D4) | bb::square_mask(Square::F4));
@@ -484,4 +474,19 @@ TEST(AttacksTest, SlidingAttacksGenericDispatchAndBitboardAggregates) {
 
     Bitboard queens = bb::square_mask(Square::D1);
     EXPECT_EQ(queen_attacks_from_bb(queens, blockers), queen_attacks(Square::D1, blockers));
+}
+
+TEST(AttacksTest, SliderTablesMatchRayReference) {
+    // Randomized occupancies of varying density on every square
+    uint64_t x = 0x9E3779B97F4A7C15ULL;
+    auto next = [&x] { x ^= x << 13; x ^= x >> 7; x ^= x << 17; return x; };
+    for (int i = 0; i < 4000; ++i) {
+        Bitboard occ = next() & next() & (i % 2 ? next() : ~0ULL);
+        for (int s = 0; s < 64; ++s) {
+            Square sq = static_cast<Square>(s);
+            ASSERT_EQ(attacks::rook_attacks(sq, occ), attacks::ray_rook_attacks(sq, occ)) << s;
+            ASSERT_EQ(attacks::bishop_attacks(sq, occ), attacks::ray_bishop_attacks(sq, occ)) << s;
+        }
+    }
+    EXPECT_EQ(attacks::rook_attacks(Square::None, 0), bb::EMPTY);
 }

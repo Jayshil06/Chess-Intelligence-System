@@ -45,23 +45,37 @@ TEST(ZobristTest, StateSensitivity) {
     uint64_t base_hash = pos.hash();
     EXPECT_EQ(base_hash, zobrist::compute_hash(pos));
 
-    // Flipping side to move changes hash
     pos.set_side_to_move(Color::Black);
     pos.recalculate_hash();
     EXPECT_NE(pos.hash(), base_hash);
     EXPECT_EQ(pos.hash(), base_hash ^ zobrist::side_key());
 
-    // Changing castling rights changes hash
     pos.reset_to_starting_position();
     pos.set_castling_rights(Castling::WhiteOO);
     pos.recalculate_hash();
     EXPECT_NE(pos.hash(), base_hash);
 
-    // Setting en-passant square changes hash
+    // An en-passant square no pawn can capture on does not change the hash
     pos.reset_to_starting_position();
-    pos.set_en_passant_square(Square::E3);
+    pos.set_en_passant_square(Square::E6);
     pos.recalculate_hash();
-    EXPECT_NE(pos.hash(), base_hash);
+    EXPECT_EQ(pos.hash(), base_hash);
+}
+
+TEST(ZobristTest, EnPassantKeyOnlyWhenCaptureIsPossible) {
+    // After 1.e4 no black pawn can take on e3: identical to the same position without ep
+    Position pos(true);
+    UndoState undo;
+    pos.make_move(Move(Square::E2, Square::E4, MoveFlag::DoublePush), undo);
+    EXPECT_EQ(pos.en_passant_square(), Square::E3);
+    EXPECT_EQ(pos.hash(), fen::parse("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1")->hash());
+
+    // With a black pawn on d4 the capture exists, so the ep square must be hashed
+    auto with_ep = fen::parse("rnbqkbnr/ppp1pppp/8/8/3pP3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 3");
+    auto without_ep = fen::parse("rnbqkbnr/ppp1pppp/8/8/3pP3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 3");
+    ASSERT_TRUE(with_ep && without_ep);
+    EXPECT_NE(with_ep->hash(), without_ep->hash());
+    EXPECT_EQ(with_ep->hash(), zobrist::compute_hash(*with_ep));
 }
 
 TEST(ZobristTest, IncrementalMatchesFullRecalculationAllMoves) {

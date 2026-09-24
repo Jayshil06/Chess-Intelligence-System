@@ -31,12 +31,12 @@ void Position::clear() {
     m_fullmove_number = 1;
     m_history.clear();
     m_zobrist_hash = 0ULL;
+    m_psq_mg = m_psq_eg = m_phase = 0;
 }
 
 void Position::reset_to_starting_position() {
     clear();
 
-    // White pieces
     m_pieces[static_cast<size_t>(Piece::WhitePawn)]   = bb::RANK_2;
     m_pieces[static_cast<size_t>(Piece::WhiteKnight)] = bb::square_mask(Square::B1) | bb::square_mask(Square::G1);
     m_pieces[static_cast<size_t>(Piece::WhiteBishop)] = bb::square_mask(Square::C1) | bb::square_mask(Square::F1);
@@ -44,7 +44,6 @@ void Position::reset_to_starting_position() {
     m_pieces[static_cast<size_t>(Piece::WhiteQueen)]  = bb::square_mask(Square::D1);
     m_pieces[static_cast<size_t>(Piece::WhiteKing)]   = bb::square_mask(Square::E1);
 
-    // Black pieces
     m_pieces[static_cast<size_t>(Piece::BlackPawn)]   = bb::RANK_7;
     m_pieces[static_cast<size_t>(Piece::BlackKnight)] = bb::square_mask(Square::B8) | bb::square_mask(Square::G8);
     m_pieces[static_cast<size_t>(Piece::BlackBishop)] = bb::square_mask(Square::C8) | bb::square_mask(Square::F8);
@@ -104,12 +103,12 @@ PieceType Position::type_at(Square sq) const noexcept {
 void Position::put_piece(Piece p, Square sq) noexcept {
     if (!is_valid_square(sq) || p == Piece::None) return;
 
-    // Remove any piece currently occupying sq
     remove_piece(sq);
 
     size_t piece_idx = static_cast<size_t>(p);
     bb::set_bit(m_pieces[piece_idx], sq);
     m_board[static_cast<size_t>(sq)] = p;
+    update_psq(p, sq, 1);
 
     Color c = color_of(p);
     bb::set_bit(m_occupancy_color[static_cast<size_t>(c)], sq);
@@ -124,6 +123,7 @@ void Position::remove_piece(Square sq) noexcept {
     bb::clear_bit(m_occupancy_color[static_cast<size_t>(color_of(p))], sq);
     bb::clear_bit(m_occupancy_all, sq);
     m_board[static_cast<size_t>(sq)] = Piece::None;
+    update_psq(p, sq, -1);
 }
 
 void Position::move_piece(Square from, Square to) noexcept {
@@ -157,15 +157,17 @@ void Position::update_occupancies() noexcept {
                       m_occupancy_color[static_cast<size_t>(Color::Black)];
 
     m_board.fill(Piece::None);
+    m_psq_mg = m_psq_eg = m_phase = 0;
     for (size_t p = 0; p < NUM_PIECES; ++p) {
         for (Bitboard b = m_pieces[p]; b;) {
-            m_board[static_cast<size_t>(bb::pop_lsb(b))] = static_cast<Piece>(p);
+            Square sq = bb::pop_lsb(b);
+            m_board[static_cast<size_t>(sq)] = static_cast<Piece>(p);
+            update_psq(static_cast<Piece>(p), sq, 1);
         }
     }
 }
 
 bool Position::validate_invariants() const noexcept {
-    // 1. Bitboard disjointness: No two piece bitboards can overlap
     for (size_t i = 0; i < NUM_PIECES; ++i) {
         for (size_t j = i + 1; j < NUM_PIECES; ++j) {
             if ((m_pieces[i] & m_pieces[j]) != bb::EMPTY) {
@@ -174,7 +176,6 @@ bool Position::validate_invariants() const noexcept {
         }
     }
 
-    // 2. White occupancy must equal union of white pieces
     Bitboard expected_white =
         m_pieces[static_cast<size_t>(Piece::WhitePawn)]   |
         m_pieces[static_cast<size_t>(Piece::WhiteKnight)] |
@@ -187,7 +188,6 @@ bool Position::validate_invariants() const noexcept {
         return false;
     }
 
-    // 3. Black occupancy must equal union of black pieces
     Bitboard expected_black =
         m_pieces[static_cast<size_t>(Piece::BlackPawn)]   |
         m_pieces[static_cast<size_t>(Piece::BlackKnight)] |
@@ -200,18 +200,15 @@ bool Position::validate_invariants() const noexcept {
         return false;
     }
 
-    // 4. White and Black occupancies must be disjoint
     if ((m_occupancy_color[static_cast<size_t>(Color::White)] &
          m_occupancy_color[static_cast<size_t>(Color::Black)]) != bb::EMPTY) {
         return false;
     }
 
-    // 5. Total occupancy must equal White OR Black
     if (m_occupancy_all != (expected_white | expected_black)) {
         return false;
     }
 
-    // 6. Pawns cannot be on Rank 1 or Rank 8
     if ((m_pieces[static_cast<size_t>(Piece::WhitePawn)] & (bb::RANK_1 | bb::RANK_8)) != bb::EMPTY) {
         return false;
     }
@@ -219,7 +216,6 @@ bool Position::validate_invariants() const noexcept {
         return false;
     }
 
-    // 7. En-passant square, if set, must be on Rank 3 or Rank 6
     if (m_en_passant_square != Square::None) {
         Rank ep_rank = square_rank(m_en_passant_square);
         if (ep_rank != Rank::Rank3 && ep_rank != Rank::Rank6) {
@@ -227,7 +223,6 @@ bool Position::validate_invariants() const noexcept {
         }
     }
 
-    // 8. Individual square lookup must match bitboards
     for (int i = 0; i < NUM_SQUARES; ++i) {
         Square sq = static_cast<Square>(i);
         Piece p = piece_at(sq);
@@ -237,6 +232,17 @@ bool Position::validate_invariants() const noexcept {
             if (!bb::test_bit(m_pieces[static_cast<size_t>(p)], sq)) return false;
         }
     }
+
+    // Incremental evaluation totals must match a full recount
+    int mg = 0, eg = 0, phase = 0;
+    for (int i = 0; i < NUM_SQUARES; ++i) {
+        Piece p = m_board[static_cast<size_t>(i)];
+        if (p == Piece::None) continue;
+        mg += eval::PSQT[static_cast<size_t>(p)][static_cast<size_t>(i)].mg;
+        eg += eval::PSQT[static_cast<size_t>(p)][static_cast<size_t>(i)].eg;
+        phase += eval::phase_weight(p);
+    }
+    if (mg != m_psq_mg || eg != m_psq_eg || phase != m_phase) return false;
 
     return true;
 }
@@ -254,7 +260,8 @@ bool Position::operator==(const Position& other) const noexcept {
            m_en_passant_square == other.m_en_passant_square &&
            m_halfmove_clock == other.m_halfmove_clock &&
            m_fullmove_number == other.m_fullmove_number &&
-           m_zobrist_hash == other.m_zobrist_hash;
+           m_zobrist_hash == other.m_zobrist_hash &&
+           m_psq_mg == other.m_psq_mg && m_psq_eg == other.m_psq_eg && m_phase == other.m_phase;
 }
 
 void Position::make_move(Move m, UndoState& undo) noexcept {
@@ -278,9 +285,8 @@ void Position::make_move(Move m, UndoState& undo) noexcept {
     }
 
     m_zobrist_hash ^= zobrist::castling_key(m_castling_rights);
-    if (m_en_passant_square != Square::None) {
-        m_zobrist_hash ^= zobrist::en_passant_key(m_en_passant_square);
-    }
+    m_zobrist_hash ^= zobrist::en_passant_key(m_en_passant_square, m_side_to_move,
+                                              piece_bb(m_side_to_move, PieceType::Pawn));
 
     if (moving_type == PieceType::Pawn || m.is_capture()) {
         m_halfmove_clock = 0;
@@ -295,7 +301,8 @@ void Position::make_move(Move m, UndoState& undo) noexcept {
     m_en_passant_square = Square::None;
     if (m.is_double_push()) {
         m_en_passant_square = attacks::ep_target_square(from, m_side_to_move);
-        m_zobrist_hash ^= zobrist::en_passant_key(m_en_passant_square);
+        m_zobrist_hash ^= zobrist::en_passant_key(m_en_passant_square, ~m_side_to_move,
+                                                  piece_bb(~m_side_to_move, PieceType::Pawn));
     }
 
     update_castling_rights(from, to);

@@ -17,13 +17,11 @@ namespace uci {
 constexpr std::string_view ENGINE_NAME = "Chess Intelligence Engine 0.2.0";
 constexpr int BENCH_DEPTH = 7;
 
-// Resolve a UCI move string (e.g. "e7e8q") to the matching legal move, restoring its flags.
+// Matches against legal moves so the result carries the correct move flags
 std::optional<Move> parse_move(const Position& pos, std::string_view str);
 
-// UCI score token: "cp <n>" or "mate <moves>".
 std::string format_score(int score);
 
-// Fixed-depth search over a standard position set; prints and returns total nodes.
 uint64_t bench(std::ostream& out, int depth = BENCH_DEPTH);
 
 class Engine {
@@ -36,7 +34,7 @@ public:
 
     void loop(std::istream& in);
     bool handle(const std::string& line);  // Returns false on "quit"
-    void wait();                           // Block until the running search finishes (stops "go infinite")
+    void wait();                           // Also stops "go infinite"
 
     [[nodiscard]] const Position& position() const noexcept { return m_pos; }
 

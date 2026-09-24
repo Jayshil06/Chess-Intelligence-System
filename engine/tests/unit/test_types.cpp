@@ -59,12 +59,10 @@ TEST(ChessTypesTest, SquareStringRoundTrip) {
         EXPECT_EQ(parsed.value(), sq);
     }
 
-    // Uppercase support
     auto e4_upper = string_to_square("E4");
     ASSERT_TRUE(e4_upper.has_value());
     EXPECT_EQ(e4_upper.value(), Square::E4);
 
-    // Invalid string parsing
     EXPECT_FALSE(string_to_square("").has_value());
     EXPECT_FALSE(string_to_square("e").has_value());
     EXPECT_FALSE(string_to_square("e44").has_value());

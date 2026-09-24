@@ -187,7 +187,6 @@ TEST(MakeUnmakeTest, OneThousandRandomMakeUnmakeSequences) {
             Position current = base_pos;
             std::vector<UndoState> undo_stack;
 
-            // Make up to 6 random legal moves
             int depth = std::uniform_int_distribution<int>(1, 6)(rng);
             for (int d = 0; d < depth; ++d) {
                 MoveList legal_moves = generate_legal_moves(current);
@@ -202,14 +201,12 @@ TEST(MakeUnmakeTest, OneThousandRandomMakeUnmakeSequences) {
                 undo_stack.push_back(undo);
             }
 
-            // Unmake all moves in reverse order
             while (!undo_stack.empty()) {
                 current.unmake_move(undo_stack.back());
                 undo_stack.pop_back();
                 EXPECT_TRUE(current.validate_invariants());
             }
 
-            // Must be identical to base position
             EXPECT_EQ(current, base_pos);
         }
     }

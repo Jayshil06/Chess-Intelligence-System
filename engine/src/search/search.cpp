@@ -12,6 +12,7 @@ constexpr int TT_MOVE_SCORE = 30000;
 constexpr int CAPTURE_SCORE = 20000;
 constexpr int KILLER_SCORE  = 15000;
 constexpr int HISTORY_MAX   = 14000;
+constexpr int DELTA_MARGIN  = 200;
 
 // Mate scores are stored relative to the node so they stay valid at any ply
 int score_to_tt(int score, int ply) noexcept {
@@ -36,7 +37,6 @@ bool is_insufficient_material(const Position& pos) noexcept {
     return bb::popcount(minors) <= 1;
 }
 
-// Selection sort step: bring the highest-scored remaining move to index i
 Move pick_next(MoveList& moves, size_t i) noexcept {
     size_t best = i;
     for (size_t j = i + 1; j < moves.size(); ++j) {
@@ -72,7 +72,7 @@ bool Searcher::should_stop() noexcept {
 bool Searcher::is_repetition(const Position& pos) const noexcept {
     int n = static_cast<int>(m_hashes.size());
     int oldest = std::max(0, n - static_cast<int>(pos.halfmove_clock()));
-    // A repeat inside the search tree is scored as a draw; game history needs threefold
+    // A repeat inside the tree is a draw; game history needs threefold
     int game_matches = 0;
     for (int i = n - 2; i >= oldest; i -= 2) {
         if (m_hashes[static_cast<size_t>(i)] == pos.hash() &&
@@ -91,7 +91,7 @@ void Searcher::score_moves(const Position& pos, MoveList& moves, Move tt_move, i
         if (m == tt_move) {
             score = TT_MOVE_SCORE;
         } else if (m.is_capture() || m.promotion_type() == PieceType::Queen) {
-            // MVV-LVA: most valuable victim first, cheapest attacker breaks ties
+            // MVV-LVA
             score = CAPTURE_SCORE;
             if (m.is_capture()) {
                 int victim = m.is_en_passant() ? 0 : static_cast<int>(pos.type_at(m.to()));
@@ -109,82 +109,44 @@ void Searcher::score_moves(const Position& pos, MoveList& moves, Move tt_move, i
     }
 }
 
-int Searcher::negamax(Position& pos, int depth, int ply) noexcept {
+// Reference search for tests: negamax (Prune = false) or fail-hard alpha-beta (Prune = true)
+template <bool Prune>
+int Searcher::reference_search(Position& pos, int alpha, int beta, int depth, int ply) noexcept {
     m_nodes++;
+    if (Prune && should_stop()) return 0;
 
-    if (pos.halfmove_clock() >= 100) {
-        return 0;
-    }
+    // Mate requires check, so quiet leaves skip move generation
+    const bool in_check = is_in_check(pos, pos.side_to_move());
+    if (depth <= 0 && !in_check) return eval::evaluate(pos);
 
     MoveList moves = generate_legal_moves(pos);
-    if (moves.empty()) {
-        if (is_in_check(pos, pos.side_to_move())) {
-            return -MATE_SCORE + ply;
-        }
-        return 0;
-    }
+    if (moves.empty()) return in_check ? -MATE_SCORE + ply : eval::SCORE_DRAW;
+    if (pos.halfmove_clock() >= 100) return eval::SCORE_DRAW;
+    if (depth <= 0) return eval::evaluate(pos);
 
-    if (depth <= 0) {
-        return eval::evaluate(pos);
-    }
-
-    int best_score = -INFINITY_SCORE;
+    int best = -INFINITY_SCORE;
     for (const auto& m : moves) {
         UndoState undo;
         pos.make_move(m, undo);
-        int score = -negamax(pos, depth - 1, ply + 1);
+        int score = -reference_search<Prune>(pos, -beta, -alpha, depth - 1, ply + 1);
         pos.unmake_move(undo);
 
-        if (score > best_score) {
-            best_score = score;
+        if constexpr (Prune) {
+            if (should_stop()) return 0;
+            if (score >= beta) return beta;
+            alpha = std::max(alpha, score);
         }
+        best = std::max(best, score);
     }
+    return Prune ? alpha : best;
+}
 
-    return best_score;
+int Searcher::negamax(Position& pos, int depth, int ply) noexcept {
+    return reference_search<false>(pos, -INFINITY_SCORE, INFINITY_SCORE, depth, ply);
 }
 
 int Searcher::alpha_beta(Position& pos, int alpha, int beta, int depth, int ply) noexcept {
-    m_nodes++;
-
-    if (should_stop()) {
-        return 0;
-    }
-
-    if (pos.halfmove_clock() >= 100) {
-        return 0;
-    }
-
-    MoveList moves = generate_legal_moves(pos);
-    if (moves.empty()) {
-        if (is_in_check(pos, pos.side_to_move())) {
-            return -MATE_SCORE + ply;
-        }
-        return 0;
-    }
-
-    if (depth <= 0) {
-        return eval::evaluate(pos);
-    }
-
-    for (const auto& m : moves) {
-        UndoState undo;
-        pos.make_move(m, undo);
-        int score = -alpha_beta(pos, -beta, -alpha, depth - 1, ply + 1);
-        pos.unmake_move(undo);
-
-        if (should_stop()) {
-            return 0;
-        }
-
-        if (score >= beta) {
-            return beta;
-        }
-        if (score > alpha) {
-            alpha = score;
-        }
-    }
-
-    return alpha;
+    return reference_search<true>(pos, alpha, beta, depth, ply);
 }
 
 int Searcher::quiescence(Position& pos, int alpha, int beta) noexcept {
@@ -193,6 +155,8 @@ int Searcher::quiescence(Position& pos, int alpha, int beta) noexcept {
 
     int stand_pat = eval::evaluate(pos);
     if (stand_pat >= beta) return stand_pat;
+    // Delta pruning
+    if (stand_pat + eval::QUEEN_VALUE + DELTA_MARGIN < alpha) return stand_pat;
     alpha = std::max(alpha, stand_pat);
 
     MoveList captures = generate_legal_moves(pos, MoveGenType::Captures);
@@ -201,6 +165,8 @@ int Searcher::quiescence(Position& pos, int alpha, int beta) noexcept {
     int best = stand_pat;
     for (size_t i = 0; i < captures.size(); ++i) {
         Move m = pick_next(captures, i);
+        int gain = m.is_en_passant() ? eval::PAWN_VALUE : eval::piece_value(pos.type_at(m.to()));
+        if (!m.is_promotion() && stand_pat + gain + DELTA_MARGIN < alpha) continue;
         UndoState undo;
         pos.make_move(m, undo);
         int score = -quiescence(pos, -beta, -alpha);
@@ -260,7 +226,7 @@ int Searcher::alpha_beta_with_q(Position& pos, int alpha, int beta, int depth, i
         if (i == 0) {
             score = -alpha_beta_with_q(pos, -beta, -alpha, depth - 1, ply + 1);
         } else {
-            // Principal variation search: null window first, re-search on fail-high
+            // PVS: null window first, re-search on fail-high
             score = -alpha_beta_with_q(pos, -alpha - 1, -alpha, depth - 1, ply + 1);
             if (score > alpha && score < beta) {
                 score = -alpha_beta_with_q(pos, -beta, -alpha, depth - 1, ply + 1);
@@ -331,7 +297,14 @@ SearchResult Searcher::search(Position& pos, const SearchLimits& limits) noexcep
     int max_depth = std::clamp(limits.max_depth, 1, MAX_PLY - 1);
     for (int d = 1; d <= max_depth; ++d) {
         int score = alpha_beta_with_q(pos, -INFINITY_SCORE, INFINITY_SCORE, d, 0);
-        if (m_stop) break;  // Incomplete iteration: keep the previous result
+        if (m_stop) {
+            // The root PV only changes after a move is fully searched, so it is safe to keep
+            if (m_pv_len[0] > 0) {
+                result.pv.assign(m_pv[0].begin(), m_pv[0].begin() + m_pv_len[0]);
+                result.best_move = result.pv[0];
+            }
+            break;
+        }
 
         result.depth = d;
         result.score = score;
@@ -342,7 +315,7 @@ SearchResult Searcher::search(Position& pos, const SearchLimits& limits) noexcep
         if (m_on_iteration) m_on_iteration(result);
 
         if (score >= MATE_SCORE - MAX_PLY) break;
-        // Another iteration would likely not finish within the time budget
+        // The next iteration would likely overrun the budget
         if (m_max_time_ms > 0 && result.time_ms * 2 >= m_max_time_ms) break;
     }
 

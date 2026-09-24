@@ -32,7 +32,6 @@ TEST(PositionTest, StartingPositionIntegrity) {
     EXPECT_EQ(bb::popcount(pos.color_occupancy(Color::Black)), 16);
     EXPECT_EQ(bb::popcount(pos.all_occupancy()), 32);
 
-    // Specific piece placements
     EXPECT_EQ(pos.piece_at(Square::E1), Piece::WhiteKing);
     EXPECT_EQ(pos.piece_at(Square::D1), Piece::WhiteQueen);
     EXPECT_EQ(pos.piece_at(Square::A1), Piece::WhiteRook);
@@ -51,11 +50,9 @@ TEST(PositionTest, StartingPositionIntegrity) {
     EXPECT_EQ(pos.piece_at(Square::C8), Piece::BlackBishop);
     EXPECT_EQ(pos.piece_at(Square::F8), Piece::BlackBishop);
 
-    // Pawn ranks
     EXPECT_EQ(pos.piece_bb(Piece::WhitePawn), bb::RANK_2);
     EXPECT_EQ(pos.piece_bb(Piece::BlackPawn), bb::RANK_7);
 
-    // Metadata
     EXPECT_EQ(pos.side_to_move(), Color::White);
     EXPECT_EQ(pos.castling_rights(), Castling::All);
     EXPECT_EQ(pos.en_passant_square(), Square::None);
@@ -80,13 +77,11 @@ TEST(PositionTest, PutRemoveAndMovePiece) {
     EXPECT_EQ(pos.color_at(Square::E4), Color::Black);
     EXPECT_EQ(pos.type_at(Square::E4), PieceType::Queen);
 
-    // Moving piece
     pos.move_piece(Square::E4, Square::D5);
     EXPECT_TRUE(pos.validate_invariants());
     EXPECT_EQ(pos.piece_at(Square::E4), Piece::None);
     EXPECT_EQ(pos.piece_at(Square::D5), Piece::BlackQueen);
 
-    // Removing piece
     pos.remove_piece(Square::D5);
     EXPECT_TRUE(pos.validate_invariants());
     EXPECT_EQ(pos.piece_at(Square::D5), Piece::None);
@@ -106,7 +101,6 @@ TEST(PositionTest, EnPassantAndCastlingMetadata) {
     pos.set_en_passant_square(Square::None);
     EXPECT_TRUE(pos.validate_invariants());
 
-    // Castling mutators
     pos.set_castling_rights(Castling::WhiteOO | Castling::BlackOOO);
     EXPECT_EQ(pos.castling_rights(), Castling::WhiteOO | Castling::BlackOOO);
 }

@@ -194,8 +194,7 @@ void Engine::cmd_go(std::istream& is) {
     if (movetime > 0) {
         limits.max_time_ms = static_cast<uint64_t>(movetime);
     } else if (has_time[us]) {
-        // Spend an even share of the clock plus most of the increment, keeping a safety margin.
-        // Some GUIs report a slightly negative clock when the engine is over time.
+        // Even share of the clock plus most of the increment; GUIs may send a negative clock
         int64_t left = std::max<int64_t>(time[us], 0);
         int64_t alloc = left / (movestogo > 0 ? movestogo : 30) + inc[us] * 3 / 4;
         limits.max_time_ms = static_cast<uint64_t>(std::clamp<int64_t>(alloc, 1, std::max<int64_t>(left - 50, 1)));
@@ -206,7 +205,7 @@ void Engine::cmd_go(std::istream& is) {
     m_infinite = infinite;
     m_thread = std::thread([this, limits, infinite, pos = m_pos]() mutable {
         search::SearchResult r = m_searcher.search(pos, limits);
-        // UCI: under "go infinite" bestmove must wait for "stop"
+        // Under "go infinite", bestmove must wait for "stop"
         while (infinite && !m_stop) std::this_thread::sleep_for(std::chrono::milliseconds(1));
         std::string line = "bestmove " + r.best_move.to_uci();
         if (r.pv.size() > 1) line += " ponder " + r.pv[1].to_uci();

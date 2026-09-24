@@ -2,6 +2,7 @@
 
 #include "board/types.h"
 #include "board/bitboard.h"
+#include "move/attacks.h"
 #include <array>
 #include <cstdint>
 
@@ -75,6 +76,11 @@ constexpr uint64_t en_passant_key(File f) noexcept {
 constexpr uint64_t en_passant_key(Square sq) noexcept {
     if (!is_valid_square(sq)) return 0ULL;
     return en_passant_key(square_file(sq));
+}
+
+// Hashed only when a capture is possible, so an unusable ep square never breaks repetition
+constexpr uint64_t en_passant_key(Square ep_sq, Color capturer, Bitboard capturer_pawns) noexcept {
+    return attacks::pawn_ep_attackers(capturer, ep_sq, capturer_pawns) ? en_passant_key(ep_sq) : 0ULL;
 }
 
 uint64_t compute_hash(const Position& pos) noexcept;

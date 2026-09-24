@@ -9,16 +9,13 @@
 
 namespace chess {
 
-// 64-bit integer representing chess board occupancy
 using Bitboard = uint64_t;
 
 namespace bb {
 
-// Empty and Universal bitboards
 constexpr Bitboard EMPTY = 0ULL;
 constexpr Bitboard ALL_SQUARES = ~0ULL;
 
-// File bitboards (A-H)
 constexpr Bitboard FILE_A = 0x0101010101010101ULL;
 constexpr Bitboard FILE_B = FILE_A << 1;
 constexpr Bitboard FILE_C = FILE_A << 2;
@@ -33,7 +30,6 @@ constexpr Bitboard NOT_FILE_H = ~FILE_H;
 constexpr Bitboard NOT_FILE_AB = ~(FILE_A | FILE_B);
 constexpr Bitboard NOT_FILE_GH = ~(FILE_G | FILE_H);
 
-// Rank bitboards (1-8)
 constexpr Bitboard RANK_1 = 0x00000000000000FFULL;
 constexpr Bitboard RANK_2 = RANK_1 << (8 * 1);
 constexpr Bitboard RANK_3 = RANK_1 << (8 * 2);
@@ -46,11 +42,6 @@ constexpr Bitboard RANK_8 = RANK_1 << (8 * 7);
 constexpr Bitboard NOT_RANK_1 = ~RANK_1;
 constexpr Bitboard NOT_RANK_8 = ~RANK_8;
 
-// Board color masks
-constexpr Bitboard LIGHT_SQUARES = 0x55AA55AA55AA55AAULL;
-constexpr Bitboard DARK_SQUARES  = 0xAA55AA55AA55AA55ULL;
-
-// Square Bitboard generator (1ULL << sq)
 constexpr Bitboard square_mask(Square sq) {
     if (!is_valid_square(sq)) return 0ULL;
     return 1ULL << static_cast<uint8_t>(sq);
@@ -66,7 +57,6 @@ constexpr Bitboard rank_mask(Rank r) {
     return RANK_1 << (8 * static_cast<uint8_t>(r));
 }
 
-// Precomputed arrays for rapid lookup
 inline constexpr auto SQUARE_MASKS = []() consteval {
     std::array<Bitboard, NUM_SQUARES> masks{};
     for (size_t i = 0; i < NUM_SQUARES; ++i) {
@@ -91,8 +81,6 @@ inline constexpr auto RANK_MASKS = []() consteval {
     return masks;
 }();
 
-// Basic Bit Manipulation Operations
-
 constexpr void set_bit(Bitboard& b, Square sq) {
     if (is_valid_square(sq)) {
         b |= (1ULL << static_cast<uint8_t>(sq));
@@ -116,37 +104,32 @@ constexpr bool test_bit(Bitboard b, Square sq) {
     return (b & (1ULL << static_cast<uint8_t>(sq))) != 0;
 }
 
-// Population Count (number of set bits) using C++23 std::popcount
 constexpr int popcount(Bitboard b) noexcept {
     return std::popcount(b);
 }
 
-// Check if exactly one bit is set
 constexpr bool has_single_bit(Bitboard b) noexcept {
     return std::has_single_bit(b);
 }
 
-// Least Significant Bit (LSB) extraction
 constexpr Square lsb(Bitboard b) noexcept {
     if (b == 0ULL) return Square::None;
     return static_cast<Square>(std::countr_zero(b));
 }
 
-// Most Significant Bit (MSB) extraction
 constexpr Square msb(Bitboard b) noexcept {
     if (b == 0ULL) return Square::None;
     return static_cast<Square>(63 - std::countl_zero(b));
 }
 
-// Pop and return the least significant bit
 inline Square pop_lsb(Bitboard& b) noexcept {
     if (b == 0ULL) return Square::None;
     Square sq = static_cast<Square>(std::countr_zero(b));
-    b &= b - 1ULL; // Clear lowest set bit
+    b &= b - 1ULL;
     return sq;
 }
 
-// Directional Shifts (safe bitboard shifts preventing file wrap-around)
+// Shifts mask off the edge file so pieces never wrap around the board
 
 constexpr Bitboard shift_north(Bitboard b) noexcept {
     return (b << 8);
@@ -180,7 +163,6 @@ constexpr Bitboard shift_south_west(Bitboard b) noexcept {
     return (b & NOT_FILE_A) >> 9;
 }
 
-// String / Visual Representation
 std::string to_string(Bitboard b);
 
 } // namespace bb

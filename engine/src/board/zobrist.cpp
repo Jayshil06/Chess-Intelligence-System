@@ -21,13 +21,8 @@ uint64_t compute_hash(const Position& pos) noexcept {
 
     hash ^= ZOBRIST.castling_keys[pos.castling_rights() & 0xF];
 
-    Square ep_sq = pos.en_passant_square();
-    if (ep_sq != Square::None) {
-        File f = square_file(ep_sq);
-        if (is_valid_file(f)) {
-            hash ^= ZOBRIST.en_passant_keys[static_cast<size_t>(f)];
-        }
-    }
+    hash ^= en_passant_key(pos.en_passant_square(), pos.side_to_move(),
+                           pos.piece_bb(pos.side_to_move(), PieceType::Pawn));
 
     return hash;
 }

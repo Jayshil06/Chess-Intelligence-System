@@ -71,7 +71,6 @@ TEST(BitboardTest, BitOperationsSetClearToggleTest) {
 
     EXPECT_EQ(b, EMPTY);
 
-    // Toggle test
     toggle_bit(b, Square::E4);
     EXPECT_TRUE(test_bit(b, Square::E4));
     toggle_bit(b, Square::E4);
@@ -106,7 +105,6 @@ TEST(BitboardTest, LsbMsbAndPopLsb) {
     EXPECT_EQ(lsb(b), Square::A1);
     EXPECT_EQ(msb(b), Square::F6);
 
-    // Pop LSB in order
     EXPECT_EQ(pop_lsb(b), Square::A1);
     EXPECT_EQ(pop_lsb(b), Square::C3);
     EXPECT_EQ(pop_lsb(b), Square::F6);

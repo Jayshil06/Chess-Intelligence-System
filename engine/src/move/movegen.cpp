@@ -394,7 +394,7 @@ bool is_legal_move(const Position& pos, Move m) noexcept {
         return is_castling_legal(pos, m.flag());
     }
 
-    // Evaluate king safety on the post-move occupancy without copying the position
+    // Check king safety on the post-move occupancy instead of copying the position
     Color them = ~us;
     Bitboard from_bb = bb::square_mask(m.from());
     Bitboard to_bb = bb::square_mask(m.to());

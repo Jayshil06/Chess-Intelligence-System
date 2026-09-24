@@ -109,3 +109,17 @@ TEST(TacticsTest, CastlingThroughCheckRejectedByCheckedMakeMove) {
     EXPECT_EQ(pos.piece_at(Square::E1), Piece::WhiteKing);
     EXPECT_TRUE(pos.history().empty());
 }
+
+TEST(TacticsTest, AbortedIterationKeepsConsistentLegalBestMove) {
+    Position root = from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1");
+    MoveList legal = generate_legal_moves(root);
+    for (uint64_t nodes = 500; nodes <= 64000; nodes *= 2) {
+        Position pos = root;
+        Searcher searcher;
+        SearchLimits limits;
+        limits.max_nodes = nodes;
+        SearchResult r = searcher.search(pos, limits);
+        ASSERT_TRUE(legal.contains(r.best_move)) << nodes;
+        if (!r.pv.empty()) EXPECT_EQ(r.pv.front(), r.best_move) << nodes;
+    }
+}

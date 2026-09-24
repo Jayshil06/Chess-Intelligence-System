@@ -10,9 +10,5 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 endif()
 
-# Enable testing
 include(CTest)
-enable_testing()
-
-# Add engine subdirectory
 add_subdirectory(engine)

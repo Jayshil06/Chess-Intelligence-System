@@ -39,7 +39,6 @@ std::optional<Position> parse(std::string_view fen_str) {
     Position pos;
     pos.clear();
 
-    // 1. Piece Placement
     std::string_view placement = tokens[0];
     int rank = 7;
     int file = 0;
@@ -69,7 +68,6 @@ std::optional<Position> parse(std::string_view fen_str) {
         return std::nullopt;
     }
 
-    // 2. Side to move
     std::string_view stm = tokens[1];
     if (stm == "w" || stm == "W") {
         pos.set_side_to_move(Color::White);
@@ -79,7 +77,6 @@ std::optional<Position> parse(std::string_view fen_str) {
         return std::nullopt;
     }
 
-    // 3. Castling rights
     std::string_view castling = tokens[2];
     uint8_t cr = Castling::None;
     if (castling != "-") {
@@ -89,13 +86,12 @@ std::optional<Position> parse(std::string_view fen_str) {
                 case 'Q': cr |= Castling::WhiteOOO; break;
                 case 'k': cr |= Castling::BlackOO;  break;
                 case 'q': cr |= Castling::BlackOOO; break;
-                default:  return std::nullopt; // Invalid castling char
+                default:  return std::nullopt;
             }
         }
     }
     pos.set_castling_rights(cr);
 
-    // 4. En-passant target square
     std::string_view ep = tokens[3];
     if (ep == "-") {
         pos.set_en_passant_square(Square::None);
@@ -106,8 +102,7 @@ std::optional<Position> parse(std::string_view fen_str) {
         }
         Square ep_sq = sq_opt.value();
         Rank ep_rank = square_rank(ep_sq);
-        // Target must be behind a pawn that just double-pushed for the side not to move,
-        // with the target and the pawn's origin square both empty
+        // Must sit behind a pawn that just double-pushed, with both squares it crossed empty
         Color us = pos.side_to_move();
         Square origin = attacks::pawn_ep_captured_square(ep_sq, ~us);
         if (ep_rank != (us == Color::White ? Rank::Rank6 : Rank::Rank3) ||
@@ -118,7 +113,6 @@ std::optional<Position> parse(std::string_view fen_str) {
         pos.set_en_passant_square(ep_sq);
     }
 
-    // 5. Halfmove clock
     if (tokens.size() >= 5) {
         int halfmove = 0;
         auto res = std::from_chars(tokens[4].data(), tokens[4].data() + tokens[4].size(), halfmove);
@@ -130,7 +124,6 @@ std::optional<Position> parse(std::string_view fen_str) {
         pos.set_halfmove_clock(0);
     }
 
-    // 6. Fullmove number
     if (tokens.size() >= 6) {
         int fullmove = 0;
         auto res = std::from_chars(tokens[5].data(), tokens[5].data() + tokens[5].size(), fullmove);
@@ -142,7 +135,7 @@ std::optional<Position> parse(std::string_view fen_str) {
         pos.set_fullmove_number(1);
     }
 
-    // Exactly one king per side, and the side that just moved cannot be left in check
+    // One king each, and the side that just moved cannot be in check
     if (bb::popcount(pos.piece_bb(Piece::WhiteKing)) != 1 || bb::popcount(pos.piece_bb(Piece::BlackKing)) != 1 ||
         is_in_check(pos, ~pos.side_to_move())) {
         return std::nullopt;
@@ -157,7 +150,6 @@ std::optional<Position> parse(std::string_view fen_str) {
     if (pos.piece_at(Square::A8) != Piece::BlackRook) cr &= ~Castling::BlackOOO;
     pos.set_castling_rights(cr);
 
-    // Validate structural invariants
     if (!pos.validate_invariants()) {
         return std::nullopt;
     }
@@ -169,7 +161,6 @@ std::optional<Position> parse(std::string_view fen_str) {
 std::string to_string(const Position& pos) {
     std::string fen;
 
-    // 1. Piece Placement
     for (int r = 7; r >= 0; --r) {
         int empty_count = 0;
         for (int f = 0; f < 8; ++f) {
@@ -193,10 +184,8 @@ std::string to_string(const Position& pos) {
         }
     }
 
-    // 2. Side to move
     fen += (pos.side_to_move() == Color::White ? " w " : " b ");
 
-    // 3. Castling rights
     uint8_t cr = pos.castling_rights();
     if (cr == Castling::None) {
         fen += '-';
@@ -208,7 +197,6 @@ std::string to_string(const Position& pos) {
     }
     fen += ' ';
 
-    // 4. En-passant target square
     Square ep = pos.en_passant_square();
     if (ep == Square::None) {
         fen += '-';
@@ -216,7 +204,6 @@ std::string to_string(const Position& pos) {
         fen += square_to_string(ep);
     }
 
-    // 5. Halfmove clock & 6. Fullmove number
     fen += ' ';
     fen += std::to_string(pos.halfmove_clock());
     fen += ' ';

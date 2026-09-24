@@ -2,12 +2,13 @@
 
 [![C++23](https://img.shields.io/badge/C%2B%2B-23-blue.svg?style=flat-square&logo=c%2B%2B)](https://en.cppreference.com/w/cpp/23)
 [![CMake](https://img.shields.io/badge/CMake-3.25%2B-064F8C.svg?style=flat-square&logo=cmake)](https://cmake.org/)
-[![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB.svg?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/Tests-117%2F117%20Passing-brightgreen.svg?style=flat-square)](./engine/tests)
-[![Contributions Welcome](https://img.shields.io/badge/Contributions-Welcome-brightgreen.svg?style=flat-square)](https://github.com/)
+[![CI](https://github.com/Jayshil06/Chess-Intelligence-System/actions/workflows/ci.yml/badge.svg)](https://github.com/Jayshil06/Chess-Intelligence-System/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/Tests-122%2F122%20Passing-brightgreen.svg?style=flat-square)](./engine/tests)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](./LICENSE)
 
-A portfolio-grade, high-performance Chess Intelligence System integrating **C++23 systems programming**, **data engineering**, **machine learning baselines**, **NNUE neural evaluation**, **FastAPI microservices**, and an **interactive React dashboard**.
+A chess intelligence platform built around a **perft-verified C++23 bitboard engine** that speaks UCI.
+The engine tier is implemented, tested, and benchmarked. The data, machine-learning, API, and dashboard
+tiers are designed and scaffolded, and are being built next (see the [roadmap](#️-implementation-roadmap)).
 
 ---
 
@@ -19,112 +20,64 @@ A portfolio-grade, high-performance Chess Intelligence System integrating **C++2
                      +--------------------+--------------------+
                      |                                         |
                      v                                         v
-               C++ ENGINE CORE                           PYTHON PLATFORM
+         C++ ENGINE CORE  [built]                  PYTHON PLATFORM  [planned]
                      |                                         |
              +-------+--------+                    +-----------+-----------+
              |       |        |                    |           |           |
-           Board   Search   UCI                 Data       Analytics      ML
+           Board   Search    UCI                 Data       Analytics      ML
              |       |        |                Pipeline       |           |
-             |       |        |                    |           |           |
-         Bitboard AlphaBeta   |                  PGN        EDA        PyTorch
-             |       |        |                    |           |           |
-             |      TT        |                  Features   Stats       NNUE
+         Bitboard   PVS      Engine               PGN        EDA        PyTorch
+         Mailbox    TT       Thread             Features    Stats        NNUE
              |       |        |                    |           |           |
              +-------+--------+                    +-----------+-----------+
                      |                                         |
                      +------------------+----------------------+
                                         |
                                         v
-                                 SELF-PLAY / ELO
+                             SELF-PLAY / ELO  [planned]
                                         |
                                         v
-                                  FASTAPI SERVICE
+                             FASTAPI SERVICE  [planned]
                                         |
                                         v
-                               REACT / TYPESCRIPT UI
+                          REACT / TYPESCRIPT UI  [planned]
 ```
 
-### 🧩 System Components
+### ✅ Built: C++ Engine Core (`engine/`)
+- 64-bit bitboards with a mailbox for O(1) piece lookup; copy-free legality checks.
+- Slider attacks from PEXT-indexed tables (BMI2) or fancy magic bitboards, validated bit-for-bit against a ray-scan reference.
+- Legal move generation verified by perft on the five standard positions (CI gate).
+- Principal Variation Search with iterative deepening, quiescence search with delta pruning, check extension, and a Zobrist-keyed transposition table.
+- Move ordering: TT move, MVV-LVA captures, killer moves, and history heuristic.
+- Draw detection: threefold repetition, fifty-move rule, and insufficient material.
+- Tapered material + piece-square evaluation, updated incrementally on every move.
+- UCI protocol with a threaded, interruptible search, clock-based time management, and `bench`/`perft` commands.
 
-- **C++ Engine Core (`engine/`)**:
-  - Pure C++23, zero-overhead 64-bit Bitboard representation.
-  - Deterministic move generation, check detection, castling, en-passant, and state rollback stack.
-  - Ray-table sliding attacks, mailbox + bitboard hybrid board, copy-free legality checks.
-  - Principal Variation Search with iterative deepening, quiescence search, check extension, and a Zobrist-keyed transposition table.
-  - Move ordering: TT move, MVV-LVA captures, killer moves, and history heuristic.
-  - Draw detection: threefold repetition, fifty-move rule, and insufficient material.
-  - Tapered king evaluation (middlegame/endgame piece-square tables).
-  - Standard Universal Chess Interface (UCI) protocol with threaded search, time management, and `bench`/`perft` commands.
-  - C++ native NNUE inference runtime.
-
-- **Python Intelligence Platform (`python/`)**:
-  - Streaming PGN ingestion and position extraction (scalable to millions of games).
-  - Deterministic feature engineering (material balance, mobility, pawn structures, king safety, piece activity).
-  - Statistical EDA with Polars and DuckDB.
-  - Classical ML baselines (Linear Regression, Random Forest, XGBoost, MLP) and PyTorch NNUE training.
-  - Self-play tournament runner, ELO calculation, and SPRT statistical testing.
-
-- **FastAPI Service (`api/`)**:
-  - High-performance asynchronous REST API bridging the engine process and client over UCI.
-  - Endpoints for position evaluation, best move recommendation, blunder detection, and analytics.
-
-- **React Dashboard (`dashboard/`)**:
-  - Modern TypeScript frontend with interactive chessboard, evaluation graph, principal variation (PV) stream, and player tendencies.
+### 🗓️ Planned (scaffolding only today)
+- **Python platform (`python/`)**: PGN ingestion, feature engineering, analytics, classical ML baselines, PyTorch NNUE training, and a self-play/Elo/SPRT harness. Currently package stubs with an import test.
+- **NNUE inference in the engine**: not started.
+- **FastAPI service (`api/`)**: engine-backed REST endpoints for evaluation, best move, and blunder detection. Currently a package stub.
+- **React dashboard (`dashboard/`)**: interactive board, evaluation graph, and PV stream. Currently `package.json` only.
 
 ---
 
 ## 📂 Repository Structure
 
 ```text
-chess-intelligence/
+Chess-Intelligence-System/
 ├── CMakeLists.txt           # Root CMake configuration
-├── README.md                # Project documentation & architecture overview
-├── LICENSE                  # MIT License
-├── .gitignore               # Clean git ignore configuration
+├── .github/workflows/ci.yml # CI: Release build + tests + perft gate, ASan/UBSan job
 │
-├── engine/                  # C++23 Chess Engine
-│   ├── CMakeLists.txt       # Engine & GoogleTest build target
-│   ├── include/             # C++ Header files
-│   │   ├── board/           # Square, Piece, Color, Bitboard, Position, FEN
-│   │   ├── move/            # Move representation & attack tables
-│   │   ├── search/          # PVS, iterative deepening, transposition table
-│   │   ├── evaluation/      # Classical evaluator
-│   │   └── protocol/        # UCI protocol handler
-│   ├── src/                 # C++ Implementations
-│   │   ├── board/           # types.cpp, bitboard.cpp, position.cpp, fen.cpp
-│   │   ├── move/            # attacks, movegen, perft
-│   │   ├── search/          # search.cpp, tt.cpp
-│   │   ├── evaluation/
-│   │   ├── protocol/        # uci.cpp
-│   │   └── main.cpp         # UCI engine entry point (`chess_engine bench` for benchmarks)
-│   └── tests/               # C++ GoogleTest suite
-│       ├── unit/            # Board, movegen, FEN, TT, UCI unit tests
-│       ├── perft/           # Perft validation suite
-│       └── search/          # Tactical search tests (mates, draws, limits)
+├── engine/                  # C++23 chess engine  [built]
+│   ├── CMakeLists.txt       # chess_core library, chess_engine, chess_bench, chess_tests
+│   ├── include/             # board/, move/, search/, evaluation/, protocol/
+│   ├── src/                 # Implementations; main.cpp is the UCI entry point
+│   ├── bench/               # chess_bench: perft gate, movegen and search benchmarks
+│   └── tests/               # GoogleTest suite: unit/, perft/, search/
 │
-├── python/                  # Python Data Platform & ML
-│   ├── pyproject.toml       # Python package configuration (Python 3.12+)
-│   ├── run_tests.py         # Test discovery and execution runner
-│   ├── chess_data/          # Streaming PGN ingestion & validation
-│   ├── features/            # Material, mobility, king safety, pawn structure features
-│   ├── analytics/           # Openings, player tendencies, blunder detection, statistics
-│   ├── models/              # Baselines, XGBoost, PyTorch neural networks & NNUE
-│   ├── experiments/         # Experiment tracking & reproducible reports
-│   ├── selfplay/            # Automated engine self-play & ELO framework
-│   └── tests/               # Python unit tests
-│
-├── api/                     # FastAPI Web Service
-│   ├── pyproject.toml
-│   └── app/
-│
-├── dashboard/               # React + TypeScript UI
-│   ├── package.json
-│   └── src/
-│
-├── data/                    # Datasets (raw, processed Parquet, features)
-├── models/                  # Checkpoints, exported weights, NNUE binaries
-├── benchmarks/              # Performance benchmarks and node-rate logs
-└── experiments/             # Experiment logs and baseline comparison metrics
+├── python/                  # Data platform & ML   [planned, package stubs]
+├── api/                     # FastAPI service      [planned, package stub]
+└── dashboard/               # React + TypeScript   [planned, package.json only]
 ```
 
 ---
@@ -134,25 +87,21 @@ chess-intelligence/
 ### Prerequisites
 - **C++ Compiler**: C++23 compliant (GCC 14+, Clang 17+, or MSVC 2022+)
 - **Build System**: CMake 3.25+ and Ninja
-- **Python**: Python 3.12+
-- **Node.js**: Node.js 18+ (for dashboard)
-
----
 
 ### Building and Testing the C++ Engine
 
-#### 1. Configure and Build (Ninja + CMake)
+#### 1. Configure and Build
 ```bash
-# Debug Build
-cmake -B build_debug -G "Ninja" -DCMAKE_BUILD_TYPE=Debug
-cmake --build build_debug
-
-# Release Build (Optimized)
-cmake -B build_release -G "Ninja" -DCMAKE_BUILD_TYPE=Release
+cmake -B build_release -G Ninja            # Release is the default build type
 cmake --build build_release
-```
 
-#### 2. Run GoogleTest Suite (117 Tests)
+# Optional: optimize for this machine (enables PEXT slider lookups on BMI2 CPUs)
+cmake -B build_native -G Ninja -DCHESS_NATIVE=ON
+```
+GoogleTest is downloaded over verified TLS and pinned by SHA-256. Behind a TLS-intercepting proxy,
+point CMake at your CA bundle with `-DCMAKE_CA_FILE=/path/to/ca.pem`; do not disable verification.
+
+#### 2. Run the Test Suite (122 Tests)
 ```bash
 ctest --test-dir build_release --output-on-failure
 ```
@@ -168,26 +117,12 @@ go movetime 1000        # also: depth N, nodes N, wtime/btime/winc/binc/movestog
 Extra commands: `d` (print FEN), `perft <depth>` (move-by-move node counts), `bench [depth]`,
 and `setoption name Hash value <MB>`.
 
-#### 4. Benchmark
+#### 4. Benchmark and Perft Gate
 ```bash
-./build_release/engine/chess_engine bench      # fixed-depth search over 6 standard positions
+./build_release/engine/chess_bench            # exits non-zero if any perft count is wrong
+./build_release/engine/chess_engine bench     # deterministic search node signature
 ```
-The bench node count is deterministic, so it doubles as a regression signature for search changes.
-
----
-
-### Python Platform Setup & Testing
-
-#### 1. Install Dependencies
-```bash
-cd python
-pip install -e .
-```
-
-#### 2. Run Python Unit Tests
-```bash
-python python/run_tests.py
-```
+Measured before/after numbers are recorded in [`engine/bench/BASELINE.md`](engine/bench/BASELINE.md).
 
 ---
 

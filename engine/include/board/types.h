@@ -9,7 +9,6 @@
 
 namespace chess {
 
-// Core Constants
 constexpr int NUM_SQUARES = 64;
 constexpr int NUM_COLORS = 2;
 constexpr int NUM_PIECE_TYPES = 6;
@@ -17,14 +16,12 @@ constexpr int NUM_PIECES = 12;
 constexpr int NUM_FILES = 8;
 constexpr int NUM_RANKS = 8;
 
-// Color representation
 enum class Color : uint8_t {
     White = 0,
     Black = 1,
     None = 2
 };
 
-// Piece Type representation
 enum class PieceType : uint8_t {
     Pawn = 0,
     Knight = 1,
@@ -35,7 +32,6 @@ enum class PieceType : uint8_t {
     None = 6
 };
 
-// Full Piece representation (combining Color and PieceType)
 enum class Piece : uint8_t {
     WhitePawn = 0,
     WhiteKnight = 1,
@@ -52,7 +48,6 @@ enum class Piece : uint8_t {
     None = 12
 };
 
-// Board File (columns a-h, 0-7)
 enum class File : uint8_t {
     FileA = 0,
     FileB = 1,
@@ -65,7 +60,6 @@ enum class File : uint8_t {
     None = 8
 };
 
-// Board Rank (rows 1-8, 0-7)
 enum class Rank : uint8_t {
     Rank1 = 0,
     Rank2 = 1,
@@ -78,8 +72,7 @@ enum class Rank : uint8_t {
     None = 8
 };
 
-// Square mapping (0-63, Little-Endian Rank-File mapping)
-// A1 = 0, B1 = 1, ..., H1 = 7, A2 = 8, ..., H8 = 63
+// Little-endian rank-file mapping: A1 = 0, H1 = 7, A8 = 56, H8 = 63
 enum class Square : uint8_t {
     A1 = 0,  B1 = 1,  C1 = 2,  D1 = 3,  E1 = 4,  F1 = 5,  G1 = 6,  H1 = 7,
     A2 = 8,  B2 = 9,  C2 = 10, D2 = 11, E2 = 12, F2 = 13, G2 = 14, H2 = 15,
@@ -91,8 +84,6 @@ enum class Square : uint8_t {
     A8 = 56, B8 = 57, C8 = 58, D8 = 59, E8 = 60, F8 = 61, G8 = 62, H8 = 63,
     None = 64
 };
-
-// Compile-time / inline helper functions
 
 constexpr bool is_valid_square(Square sq) {
     return static_cast<uint8_t>(sq) < NUM_SQUARES;
@@ -166,7 +157,6 @@ constexpr int square_index(Square sq) {
     return static_cast<int>(sq);
 }
 
-// Distance helpers
 inline int chebyshev_distance(Square a, Square b) {
     int file_diff = std::abs(static_cast<int>(square_file(a)) - static_cast<int>(square_file(b)));
     int rank_diff = std::abs(static_cast<int>(square_rank(a)) - static_cast<int>(square_rank(b)));
@@ -179,7 +169,6 @@ inline int manhattan_distance(Square a, Square b) {
     return file_diff + rank_diff;
 }
 
-// String and character conversions
 std::string square_to_string(Square sq);
 std::optional<Square> string_to_square(std::string_view str);
 

@@ -4,13 +4,16 @@
 #include "board/bitboard.h"
 #include <array>
 #include <cstdint>
+#if defined(__BMI2__)
+#include <immintrin.h>
+#endif
 
 namespace chess {
 namespace attacks {
 
 namespace detail {
 
-// Directions 0-3 move toward higher square indices, 4-7 toward lower ones.
+// Directions 0-3 run toward higher square indices, 4-7 toward lower ones
 enum Direction : int { North, East, NorthEast, NorthWest, South, West, SouthEast, SouthWest };
 constexpr int DIR_FILE[8] = {0, 1, 1, -1, 0, -1, 1, -1};
 constexpr int DIR_RANK[8] = {1, 0, 1, 1, -1, 0, -1, -1};
@@ -30,7 +33,6 @@ consteval std::array<std::array<Bitboard, NUM_SQUARES>, 8> init_rays() {
 
 inline constexpr auto RAYS = init_rays();
 
-// Ray attacks up to and including the nearest blocker.
 constexpr Bitboard ray_attacks(int dir, size_t sq, Bitboard blockers) noexcept {
     Bitboard ray = RAYS[dir][sq];
     if (Bitboard b = ray & blockers) {
@@ -42,22 +44,19 @@ constexpr Bitboard ray_attacks(int dir, size_t sq, Bitboard blockers) noexcept {
 
 } // namespace detail
 
-constexpr Bitboard rook_attacks(Square sq, Bitboard blockers = bb::EMPTY) noexcept {
+// Reference ray scans: build compile-time tables and validate the runtime lookup tables
+constexpr Bitboard ray_rook_attacks(Square sq, Bitboard blockers = bb::EMPTY) noexcept {
     if (!is_valid_square(sq)) return bb::EMPTY;
     size_t s = static_cast<size_t>(sq);
     return detail::ray_attacks(detail::North, s, blockers) | detail::ray_attacks(detail::East, s, blockers) |
            detail::ray_attacks(detail::South, s, blockers) | detail::ray_attacks(detail::West, s, blockers);
 }
 
-constexpr Bitboard bishop_attacks(Square sq, Bitboard blockers = bb::EMPTY) noexcept {
+constexpr Bitboard ray_bishop_attacks(Square sq, Bitboard blockers = bb::EMPTY) noexcept {
     if (!is_valid_square(sq)) return bb::EMPTY;
     size_t s = static_cast<size_t>(sq);
     return detail::ray_attacks(detail::NorthEast, s, blockers) | detail::ray_attacks(detail::NorthWest, s, blockers) |
            detail::ray_attacks(detail::SouthEast, s, blockers) | detail::ray_attacks(detail::SouthWest, s, blockers);
-}
-
-constexpr Bitboard queen_attacks(Square sq, Bitboard blockers = bb::EMPTY) noexcept {
-    return bishop_attacks(sq, blockers) | rook_attacks(sq, blockers);
 }
 
 namespace detail {
@@ -159,7 +158,7 @@ consteval std::array<std::array<Bitboard, NUM_SQUARES>, 2> init_pawn_attacks() {
 consteval std::array<Bitboard, NUM_SQUARES> init_bishop_rays() {
     std::array<Bitboard, NUM_SQUARES> table{};
     for (size_t i = 0; i < NUM_SQUARES; ++i) {
-        table[i] = bishop_attacks(static_cast<Square>(i), bb::EMPTY);
+        table[i] = ray_bishop_attacks(static_cast<Square>(i), bb::EMPTY);
     }
     return table;
 }
@@ -167,7 +166,7 @@ consteval std::array<Bitboard, NUM_SQUARES> init_bishop_rays() {
 consteval std::array<Bitboard, NUM_SQUARES> init_rook_rays() {
     std::array<Bitboard, NUM_SQUARES> table{};
     for (size_t i = 0; i < NUM_SQUARES; ++i) {
-        table[i] = rook_attacks(static_cast<Square>(i), bb::EMPTY);
+        table[i] = ray_rook_attacks(static_cast<Square>(i), bb::EMPTY);
     }
     return table;
 }
@@ -175,10 +174,29 @@ consteval std::array<Bitboard, NUM_SQUARES> init_rook_rays() {
 consteval std::array<Bitboard, NUM_SQUARES> init_queen_rays() {
     std::array<Bitboard, NUM_SQUARES> table{};
     for (size_t i = 0; i < NUM_SQUARES; ++i) {
-        table[i] = queen_attacks(static_cast<Square>(i), bb::EMPTY);
+        table[i] = ray_bishop_attacks(static_cast<Square>(i), bb::EMPTY) | ray_rook_attacks(static_cast<Square>(i), bb::EMPTY);
     }
     return table;
 }
+
+// PEXT index with BMI2, fancy magic otherwise; tables are filled in attacks.cpp
+struct SliderEntry {
+    Bitboard mask{0};
+    Bitboard magic{0};
+    const Bitboard* attacks{nullptr};
+    unsigned shift{0};
+
+    [[nodiscard]] size_t index(Bitboard occ) const noexcept {
+#if defined(__BMI2__)
+        return static_cast<size_t>(_pext_u64(occ, mask));
+#else
+        return static_cast<size_t>(((occ & mask) * magic) >> shift);
+#endif
+    }
+};
+
+extern SliderEntry ROOK_ENTRIES[NUM_SQUARES];
+extern SliderEntry BISHOP_ENTRIES[NUM_SQUARES];
 
 } // namespace detail
 
@@ -218,6 +236,22 @@ constexpr Bitboard pawn_attacks(Color color, Square sq) noexcept {
 
 constexpr Bitboard pawn_attacks(Square sq, Color color) noexcept {
     return pawn_attacks(color, sq);
+}
+
+inline Bitboard rook_attacks(Square sq, Bitboard blockers = bb::EMPTY) noexcept {
+    if (!is_valid_square(sq)) return bb::EMPTY;
+    const detail::SliderEntry& e = detail::ROOK_ENTRIES[static_cast<size_t>(sq)];
+    return e.attacks[e.index(blockers)];
+}
+
+inline Bitboard bishop_attacks(Square sq, Bitboard blockers = bb::EMPTY) noexcept {
+    if (!is_valid_square(sq)) return bb::EMPTY;
+    const detail::SliderEntry& e = detail::BISHOP_ENTRIES[static_cast<size_t>(sq)];
+    return e.attacks[e.index(blockers)];
+}
+
+inline Bitboard queen_attacks(Square sq, Bitboard blockers = bb::EMPTY) noexcept {
+    return bishop_attacks(sq, blockers) | rook_attacks(sq, blockers);
 }
 
 inline Bitboard knight_attacks_from_bb(Bitboard knights) noexcept {
@@ -294,7 +328,7 @@ inline Bitboard queen_attacks_from_bb(Bitboard queens, Bitboard blockers = bb::E
     return attacks;
 }
 
-constexpr Bitboard sliding_attacks(PieceType type, Square sq, Bitboard blockers = bb::EMPTY) noexcept {
+inline Bitboard sliding_attacks(PieceType type, Square sq, Bitboard blockers = bb::EMPTY) noexcept {
     switch (type) {
         case PieceType::Bishop: return bishop_attacks(sq, blockers);
         case PieceType::Rook:   return rook_attacks(sq, blockers);
@@ -303,7 +337,7 @@ constexpr Bitboard sliding_attacks(PieceType type, Square sq, Bitboard blockers 
     }
 }
 
-constexpr Bitboard attacks_by_type(PieceType type, Square sq, Bitboard blockers = bb::EMPTY, Color pawn_color = Color::White) noexcept {
+inline Bitboard attacks_by_type(PieceType type, Square sq, Bitboard blockers = bb::EMPTY, Color pawn_color = Color::White) noexcept {
     switch (type) {
         case PieceType::Pawn:   return pawn_attacks(pawn_color, sq);
         case PieceType::Knight: return knight_attacks(sq);

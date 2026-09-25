@@ -1,10 +1,7 @@
 import math
 import os
-import sys
 import unittest
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import chess
 import chess.engine
@@ -62,10 +59,22 @@ class TestMatchSetup(unittest.TestCase):
         self.assertEqual(TimeControl.parse("60"), TimeControl(60.0, 0.0))
 
 
-@unittest.skipUnless(find_engine(), "build the engine or set CHESS_ENGINE to run match tests")
+def require_engine() -> str:
+    engine = find_engine()
+    if engine is None:
+        raise unittest.SkipTest("build the engine or set CHESS_ENGINE to run engine tests")
+    return engine
+
+
 class TestMatchWithEngine(unittest.TestCase):
+    engine: str
+
+    @classmethod
+    def setUpClass(cls):
+        cls.engine = require_engine()
+
     def test_fixed_depth_match_completes_legally(self):
-        engine = find_engine()
+        engine = self.engine
         result = run_match(engine, engine, games=2, limit=chess.engine.Limit(depth=2))
         self.assertEqual(result.played, 2)
         for game in result.games:
@@ -75,8 +84,17 @@ class TestMatchWithEngine(unittest.TestCase):
                 self.assertIn(move, board.legal_moves)
                 board.push(move)
 
+    def test_unpaired_games_use_distinct_openings(self):
+        engine = self.engine
+        openings = ["e4 e5", "d4 d5"]
+        paired = run_match(engine, engine, games=2, openings=openings, limit=chess.engine.Limit(depth=1))
+        unpaired = run_match(engine, engine, games=2, openings=openings, paired=False,
+                             limit=chess.engine.Limit(depth=1))
+        self.assertEqual(paired.games[0].headers["FEN"], paired.games[1].headers["FEN"])
+        self.assertNotEqual(unpaired.games[0].headers["FEN"], unpaired.games[1].headers["FEN"])
+
     def test_clock_match_has_no_forfeit(self):
-        engine = find_engine()
+        engine = self.engine
         result = run_match(engine, engine, games=2, tc=TimeControl(1.0, 0.02))
         self.assertEqual(result.played, 2)
         self.assertFalse(any(g.headers["Termination"] in ("time forfeit", "illegal move") for g in result.games))

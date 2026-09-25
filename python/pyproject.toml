@@ -22,6 +22,9 @@ dependencies = [
 chess-ingest = "chess_data.ingest:main"
 chess-features = "features.extract:main"
 chess-match = "selfplay.match:main"
+chess-analytics = "analytics.report:main"
+chess-blunders = "analytics.blunders:main"
+chess-train = "models.baselines:main"
 
 [project.optional-dependencies]
 zstd = ["zstandard>=0.22.0"]
@@ -33,7 +36,7 @@ dev = [
     "pytest>=8.0.0",
     "pytest-cov>=4.1.0",
     "ruff>=0.3.0",
-    "mypy>=1.9.0"
+    "basedpyright>=1.20.0"
 ]
 
 [tool.setuptools.packages.find]
@@ -43,3 +46,9 @@ include = ["chess_data*", "features*", "analytics*", "models*", "experiments*", 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM"]

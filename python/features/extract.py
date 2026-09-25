@@ -80,7 +80,7 @@ def _mobility(board: chess.Board, color: chess.Color) -> int:
 def board_features(board: chess.Board) -> dict[str, int]:
     f: dict[str, int] = {}
     counts = {pt: (len(board.pieces(pt, chess.WHITE)), len(board.pieces(pt, chess.BLACK))) for pt in PIECE_VALUES}
-    for pt, name in zip(PIECE_VALUES, FEATURE_NAMES[:5]):
+    for pt, name in zip(PIECE_VALUES, FEATURE_NAMES[:5], strict=True):
         f[name] = counts[pt][0] - counts[pt][1]
     f["material_cp"] = sum(PIECE_VALUES[pt] * (w - b) for pt, (w, b) in counts.items())
     f["bishop_pair"] = int(counts[chess.BISHOP][0] >= 2) - int(counts[chess.BISHOP][1] >= 2)
@@ -90,7 +90,8 @@ def board_features(board: chess.Board) -> dict[str, int]:
         for sq in chess.scan_forward(CENTER))
 
     white_pawns, black_pawns = _pawn_structure(board, chess.WHITE), _pawn_structure(board, chess.BLACK)
-    f["doubled_pawns"], f["isolated_pawns"], f["passed_pawns"] = (w - b for w, b in zip(white_pawns, black_pawns))
+    for name, w, b in zip(("doubled_pawns", "isolated_pawns", "passed_pawns"), white_pawns, black_pawns, strict=True):
+        f[name] = w - b
 
     white_shield, white_danger = _king_safety(board, chess.WHITE)
     black_shield, black_danger = _king_safety(board, chess.BLACK)

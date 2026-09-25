@@ -17,6 +17,10 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -e "python[dev,zstd]"
+      - name: Lint and type-check Python
+        run: |
+          ruff check python
+          basedpyright --pythonpath "$(which python)"
       - name: Python platform tests (match tests use the engine built above)
         run: python python/run_tests.py
         env:

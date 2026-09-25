@@ -1,0 +1,9 @@
+{
+  "include": ["python", "api"],
+  "exclude": ["**/__pycache__", "**/*.egg-info"],
+  "venvPath": ".",
+  "venv": ".venv",
+  "extraPaths": ["python", "python/tests"],
+  "pythonVersion": "3.12",
+  "typeCheckingMode": "standard"
+}

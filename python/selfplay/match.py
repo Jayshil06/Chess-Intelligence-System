@@ -46,6 +46,16 @@ class TimeControl:
         return cls(float(base), float(inc or 0))
 
 
+def _move_limit(limit: chess.engine.Limit | None, tc: TimeControl | None,
+                clock: dict[chess.Color, float]) -> chess.engine.Limit:
+    if tc is not None:
+        return chess.engine.Limit(white_clock=clock[chess.WHITE], black_clock=clock[chess.BLACK],
+                                  white_inc=tc.increment, black_inc=tc.increment)
+    if limit is None:
+        raise ValueError("play_game needs a limit or a time control")
+    return limit
+
+
 @dataclass
 class MatchResult:
     """Counts are from the first engine's point of view."""
@@ -65,20 +75,18 @@ def play_game(white: chess.engine.SimpleEngine, black: chess.engine.SimpleEngine
     """Play one game. With a time control, running out of clock or moving illegally forfeits."""
     board = chess.Board(start_fen)
     engines = {chess.WHITE: white, chess.BLACK: black}
-    clock = {chess.WHITE: tc.base, chess.BLACK: tc.base} if tc else None
-    result, termination = None, None
+    clock = {chess.WHITE: tc.base, chess.BLACK: tc.base} if tc else {}
+    result: str | None = None
+    termination = ""
 
     while not board.is_game_over(claim_draw=True) and len(board.move_stack) < max_plies:
         mover = board.turn
-        if clock:
-            limit = chess.engine.Limit(white_clock=clock[chess.WHITE], black_clock=clock[chess.BLACK],
-                                       white_inc=tc.increment, black_inc=tc.increment)
         start = time.perf_counter()
         try:
-            move = engines[mover].play(board, limit, game=game_key).move
+            move = engines[mover].play(board, _move_limit(limit, tc, clock), game=game_key).move
         except chess.engine.EngineError:
             move = None
-        if clock:
+        if tc is not None:
             clock[mover] -= time.perf_counter() - start
             if clock[mover] < 0:
                 result, termination = ("0-1" if mover == chess.WHITE else "1-0"), "time forfeit"
@@ -101,9 +109,11 @@ def play_game(white: chess.engine.SimpleEngine, black: chess.engine.SimpleEngine
 
 def run_match(engine1: str, engine2: str, games: int, *, openings: list[str] | None = None,
               limit: chess.engine.Limit | None = None, tc: TimeControl | None = None,
-              sprt: tuple[float, float] | None = None,
+              sprt: tuple[float, float] | None = None, paired: bool = True,
               on_game: Callable[[MatchResult], None] | None = None) -> MatchResult:
-    """Each opening is played twice with colours swapped. Stops early once SPRT decides."""
+    """Each opening is played twice with colours swapped (paired=False gives every game its own
+    opening, which avoids duplicate games when generating training data from one engine).
+    Stops early once SPRT decides."""
     if limit is None and tc is None:
         limit = chess.engine.Limit(time=0.1)
     fens = [opening_fen(line) for line in (openings or DEFAULT_OPENINGS)]
@@ -114,7 +124,8 @@ def run_match(engine1: str, engine2: str, games: int, *, openings: list[str] | N
         for i in range(games):
             first_is_white = i % 2 == 0
             white, black = (first, second) if first_is_white else (second, first)
-            game = play_game(white, black, fens[(i // 2) % len(fens)], limit=limit, tc=tc, game_key=i)
+            fen = fens[(i // 2 if paired else i) % len(fens)]
+            game = play_game(white, black, fen, limit=limit, tc=tc, game_key=i)
             game.headers["White"] = Path(engine1 if first_is_white else engine2).name
             game.headers["Black"] = Path(engine2 if first_is_white else engine1).name
             game.headers["Round"] = str(i + 1)

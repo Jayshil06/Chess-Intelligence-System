@@ -7,8 +7,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](./LICENSE)
 
 A chess intelligence platform built around a **perft-verified C++23 bitboard engine** that speaks UCI.
-The engine tier and the Python data pipeline (PGN ingestion, features, self-play/Elo/SPRT) are implemented
-and tested. Analytics, machine learning, the API, and the dashboard are designed and scaffolded, and are being built next (see the [roadmap](#️-implementation-roadmap)).
+The engine tier and the Python platform (PGN ingestion, features, analytics, classical ML baselines, and
+self-play/Elo/SPRT) are implemented and tested. NNUE training, the API, and the dashboard are designed and
+scaffolded, and are being built next (see the [roadmap](#️-implementation-roadmap)).
 
 ---
 
@@ -26,7 +27,8 @@ and tested. Analytics, machine learning, the API, and the dashboard are designed
              |       |        |                    |           |           |
            Board   Search    UCI                 Data       Analytics      ML
              |       |        |                Pipeline       |           |
-             |       |        |               [built]     [planned]   [planned]
+             |       |        |               [built]      [built]    [baselines built,
+             |       |        |                                        NNUE planned]
          Bitboard   PVS      Engine               PGN        EDA        PyTorch
          Mailbox    TT       Thread             Features    Stats        NNUE
              |       |        |                    |           |           |
@@ -58,9 +60,12 @@ and tested. Analytics, machine learning, the API, and the dashboard are designed
 - **`chess_data`**: streaming PGN ingestion (plain, `.gz`, `.bz2`, `.zst`) at constant memory. Rejects games with illegal moves, variants, missing results, or players below an Elo floor, and writes one Parquet row per position.
 - **`features`**: deterministic features per position (material, bishop pair, mobility, centre control, doubled/isolated/passed pawns, king shield and king-zone attacks, phase), streamed Parquet to Parquet.
 - **`selfplay`**: UCI engine matches with paired openings and real clocks (time forfeits and illegal moves are scored). Reports Elo with a 95% confidence interval and stops early on an SPRT decision.
+- **`analytics`**: DuckDB reports for opening results, Elo calibration (actual vs expected score), player tendencies, and feature/result correlation, plus engine-based blunder detection by centipawn loss.
+- **`models`**: result-prediction baselines (constant, ridge regression, random forest, MLP, XGBoost) trained on a game-grouped split so positions from one game never leak across train and test.
+- **`experiments`**: every training run is recorded as JSON with parameters, metrics, git commit, and Python version.
 
 ### 🗓️ Planned (scaffolding only today)
-- **Analytics and ML (`python/analytics`, `python/models`)**: opening and player statistics, classical ML baselines, and PyTorch NNUE training.
+- **NNUE (`python/models`, engine)**: engine-labelled training data, PyTorch NNUE training, and C++ inference in the engine.
 - **NNUE inference in the engine**: not started.
 - **FastAPI service (`api/`)**: engine-backed REST endpoints for evaluation, best move, and blunder detection. Currently a package stub.
 - **React dashboard (`dashboard/`)**: interactive board, evaluation graph, and PV stream. Currently `package.json` only.
@@ -81,7 +86,7 @@ Chess-Intelligence-System/
 │   ├── bench/               # chess_bench: perft gate, movegen and search benchmarks
 │   └── tests/               # GoogleTest suite: unit/, perft/, search/
 │
-├── python/                  # chess_data, features, selfplay [built]; analytics, models [planned]
+├── python/                  # chess_data, features, analytics, models, experiments, selfplay [built]
 ├── api/                     # FastAPI service      [planned, package stub]
 └── dashboard/               # React + TypeScript   [planned, package.json only]
 ```
@@ -140,6 +145,9 @@ python python/run_tests.py                              # match tests use the en
 chess-ingest games.pgn.zst positions.parquet --min-elo 2000 --skip-plies 8
 chess-features positions.parquet features.parquet
 chess-match ./new_engine ./base_engine --games 400 --tc 10+0.1 --sprt 0 5 --pgn match.pgn
+chess-analytics positions.parquet --features features.parquet
+chess-blunders games.pgn ./build_release/engine/chess_engine --depth 8 --threshold 200
+chess-train features.parquet                            # records a run in experiments/runs/
 ```
 Ingestion runs at roughly 220 games/s and feature extraction at roughly 11K positions/s on one core.
 
@@ -154,7 +162,8 @@ Ingestion runs at roughly 220 games/s and feature extraction at roughly 11K posi
 - [x] **Steps 21–25 — Search Optimizations & UCI Protocol**: Transposition Table, move ordering heuristics, UCI protocol handler, and engine benchmarks.
 - [ ] **Steps 26–34 — Python Data Platform, ML Baselines & PyTorch NNUE**: PGN pipeline, feature engineering, analytics, ML baselines, and NNUE training.
   - [x] PGN ingestion pipeline, feature engineering, and self-play/Elo/SPRT harness (moved ahead of ML so every engine change can be measured)
-  - [ ] Analytics, classical ML baselines, PyTorch NNUE training
+  - [x] Analytics (openings, Elo calibration, players, blunders), classical ML baselines, experiment tracking
+  - [ ] Engine-labelled data and PyTorch NNUE training
 - [ ] **Steps 35–38 — FastAPI Service, React Dashboard & Portfolio Release**: Web microservice, interactive UI, self-play ELO evaluation, and portfolio release.
 
 ---

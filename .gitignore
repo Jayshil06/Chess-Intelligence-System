@@ -66,6 +66,7 @@ data/features/*
 models/checkpoints/*
 models/exported/*
 models/nnue/*
+experiments/runs/
 
 # OS generated
 .DS_Store

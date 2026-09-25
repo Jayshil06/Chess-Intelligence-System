@@ -63,8 +63,8 @@ def rejection_reason(game: chess.pgn.Game, min_elo: int = 0) -> str | None:
     if game.next() is None:
         return "no_moves"
     if min_elo:
-        elos = (_elo(game.headers, "WhiteElo"), _elo(game.headers, "BlackElo"))
-        if None in elos or min(elos) < min_elo:
+        white, black = _elo(game.headers, "WhiteElo"), _elo(game.headers, "BlackElo")
+        if white is None or black is None or min(white, black) < min_elo:
             return "low_elo"
     return None
 
@@ -88,6 +88,7 @@ def iter_positions(game: chess.pgn.Game, game_id: int, skip_plies: int = 0, ever
     result = RESULT_SCORE[headers["Result"]]
     white_elo, black_elo = _elo(headers, "WhiteElo"), _elo(headers, "BlackElo")
     eco = headers.get("ECO")
+    white, black = headers.get("White"), headers.get("Black")
     board = game.board()
     for ply, move in enumerate(game.mainline_moves()):
         if ply >= skip_plies and (ply - skip_plies) % every == 0:
@@ -98,6 +99,8 @@ def iter_positions(game: chess.pgn.Game, game_id: int, skip_plies: int = 0, ever
                 "side_to_move": 0 if board.turn == chess.WHITE else 1,
                 "move": move.uci(),
                 "result": result,
+                "white": white,
+                "black": black,
                 "white_elo": white_elo,
                 "black_elo": black_elo,
                 "eco": eco,

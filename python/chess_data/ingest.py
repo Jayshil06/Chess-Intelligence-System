@@ -18,6 +18,8 @@ SCHEMA = pa.schema([
     ("side_to_move", pa.int8()),
     ("move", pa.string()),
     ("result", pa.float32()),
+    ("white", pa.string()),
+    ("black", pa.string()),
     ("white_elo", pa.int32()),
     ("black_elo", pa.int32()),
     ("eco", pa.string()),

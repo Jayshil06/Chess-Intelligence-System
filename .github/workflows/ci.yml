@@ -13,6 +13,14 @@ jobs:
       - run: ctest --test-dir build --output-on-failure
       - name: Perft gate and benchmark
         run: ./build/engine/chess_bench
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e "python[dev,zstd]"
+      - name: Python platform tests (match tests use the engine built above)
+        run: python python/run_tests.py
+        env:
+          CHESS_ENGINE: build/engine/chess_engine
 
   sanitizers:
     runs-on: ubuntu-24.04

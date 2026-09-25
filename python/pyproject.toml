@@ -6,7 +6,6 @@ build-backend = "setuptools.build_meta"
 name = "chess-platform"
 version = "0.1.0"
 description = "Chess Intelligence Platform - Data Engineering, Features, ML & NNUE"
-readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "polars>=0.20.0",
@@ -19,7 +18,13 @@ dependencies = [
     "chess>=1.10.0"
 ]
 
+[project.scripts]
+chess-ingest = "chess_data.ingest:main"
+chess-features = "features.extract:main"
+chess-match = "selfplay.match:main"
+
 [project.optional-dependencies]
+zstd = ["zstandard>=0.22.0"]
 ml = [
     "xgboost>=2.0.0",
     "torch>=2.2.0"

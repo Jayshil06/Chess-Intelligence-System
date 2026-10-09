@@ -37,6 +37,7 @@ int evaluate_pst(const Position& pos, Color c) noexcept {
 }
 
 int evaluate(const Position& pos) noexcept {
+    if (nnue::active()) return nnue::evaluate(pos);
     int eval = taper(pos.psq_mg(), pos.psq_eg(), pos.phase());
     return (pos.side_to_move() == Color::White) ? eval : -eval;
 }

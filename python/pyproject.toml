@@ -20,6 +20,8 @@ dependencies = [
 
 [project.scripts]
 chess-ingest = "chess_data.ingest:main"
+chess-label = "chess_data.label:main"
+chess-nnue = "models.nnue:main"
 chess-features = "features.extract:main"
 chess-match = "selfplay.match:main"
 chess-analytics = "analytics.report:main"
@@ -46,6 +48,8 @@ include = ["chess_data*", "features*", "analytics*", "models*", "experiments*", 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
+# python-chess uses an asyncio API that Python 3.14 deprecates; not actionable here
+filterwarnings = ["ignore:'asyncio.DefaultEventLoopPolicy' is deprecated:DeprecationWarning:chess.engine"]
 
 [tool.ruff]
 line-length = 120

@@ -110,6 +110,7 @@ def play_game(white: chess.engine.SimpleEngine, black: chess.engine.SimpleEngine
 def run_match(engine1: str, engine2: str, games: int, *, openings: list[str] | None = None,
               limit: chess.engine.Limit | None = None, tc: TimeControl | None = None,
               sprt: tuple[float, float] | None = None, paired: bool = True,
+              options1: dict[str, str] | None = None, options2: dict[str, str] | None = None,
               on_game: Callable[[MatchResult], None] | None = None) -> MatchResult:
     """Each opening is played twice with colours swapped (paired=False gives every game its own
     opening, which avoids duplicate games when generating training data from one engine).
@@ -120,6 +121,8 @@ def run_match(engine1: str, engine2: str, games: int, *, openings: list[str] | N
     result = MatchResult()
     first = chess.engine.SimpleEngine.popen_uci(engine_command(engine1))
     second = chess.engine.SimpleEngine.popen_uci(engine_command(engine2))
+    first.configure(options1 or {})
+    second.configure(options2 or {})
     try:
         for i in range(games):
             first_is_white = i % 2 == 0
@@ -159,6 +162,9 @@ def main() -> None:
     parser.add_argument("--depth", type=int, help="fixed depth per move (when --tc is not given)")
     parser.add_argument("--sprt", nargs=2, type=float, metavar=("ELO0", "ELO1"), help="stop at an SPRT decision")
     parser.add_argument("--pgn", help="write all games to this PGN file")
+    parser.add_argument("--option1", action="append", default=[], metavar="NAME=VALUE",
+                        help="UCI option for engine1, e.g. EvalFile=net.nnue (repeatable)")
+    parser.add_argument("--option2", action="append", default=[], metavar="NAME=VALUE")
     args = parser.parse_args()
 
     tc = TimeControl.parse(args.tc) if args.tc else None
@@ -173,8 +179,12 @@ def main() -> None:
             line += f"  LLR {sprt_llr(r.wins, r.draws, r.losses, *args.sprt):+.2f} [{lo:.2f}, {hi:.2f}]"
         print(line, flush=True)
 
+    def parse_options(pairs: list[str]) -> dict[str, str]:
+        return dict(pair.split("=", 1) for pair in pairs)
+
     result = run_match(args.engine1, args.engine2, args.games, limit=limit, tc=tc,
-                       sprt=tuple(args.sprt) if args.sprt else None, on_game=report)
+                       sprt=tuple(args.sprt) if args.sprt else None, on_game=report,
+                       options1=parse_options(args.option1), options2=parse_options(args.option2))
     if args.sprt:
         print("SPRT:", sprt_decision(result.wins, result.draws, result.losses, *args.sprt) or "inconclusive")
     if args.pgn:

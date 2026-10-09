@@ -32,6 +32,25 @@ void Position::clear() {
     m_history.clear();
     m_zobrist_hash = 0ULL;
     m_psq_mg = m_psq_eg = m_phase = 0;
+    reset_accumulators();
+}
+
+void Position::reset_accumulators() noexcept {
+    const nnue::Network* net = nnue::active();
+    for (auto& acc : m_acc) {
+        acc.fill(0);
+        if (net) std::copy(net->ft_bias.begin(), net->ft_bias.end(), acc.begin());
+    }
+}
+
+void Position::update_accumulators(const nnue::Network& net, Piece p, Square sq, int sign) noexcept {
+    for (Color c : {Color::White, Color::Black}) {
+        const int16_t* w = net.ft_weight.data() + nnue::feature_index(p, sq, c) * static_cast<size_t>(net.hidden);
+        auto& acc = m_acc[static_cast<size_t>(c)];
+        for (int i = 0; i < net.hidden; ++i) {
+            acc[static_cast<size_t>(i)] = static_cast<int16_t>(acc[static_cast<size_t>(i)] + sign * w[i]);
+        }
+    }
 }
 
 void Position::reset_to_starting_position() {
@@ -158,6 +177,7 @@ void Position::update_occupancies() noexcept {
 
     m_board.fill(Piece::None);
     m_psq_mg = m_psq_eg = m_phase = 0;
+    reset_accumulators();
     for (size_t p = 0; p < NUM_PIECES; ++p) {
         for (Bitboard b = m_pieces[p]; b;) {
             Square sq = bb::pop_lsb(b);
@@ -244,6 +264,13 @@ bool Position::validate_invariants() const noexcept {
     }
     if (mg != m_psq_mg || eg != m_psq_eg || phase != m_phase) return false;
 
+    // Accumulators must match a rebuild from scratch
+    if (nnue::active()) {
+        Position fresh = *this;
+        fresh.refresh();
+        if (fresh.m_acc != m_acc) return false;
+    }
+
     return true;
 }
 
@@ -261,7 +288,8 @@ bool Position::operator==(const Position& other) const noexcept {
            m_halfmove_clock == other.m_halfmove_clock &&
            m_fullmove_number == other.m_fullmove_number &&
            m_zobrist_hash == other.m_zobrist_hash &&
-           m_psq_mg == other.m_psq_mg && m_psq_eg == other.m_psq_eg && m_phase == other.m_phase;
+           m_psq_mg == other.m_psq_mg && m_psq_eg == other.m_psq_eg && m_phase == other.m_phase &&
+           m_acc == other.m_acc;
 }
 
 void Position::make_move(Move m, UndoState& undo) noexcept {

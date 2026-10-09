@@ -1,5 +1,6 @@
 #include "protocol/uci.h"
 #include "board/fen.h"
+#include "evaluation/evaluate.h"
 #include "move/movegen.h"
 #include "move/perft.h"
 #include <algorithm>
@@ -92,7 +93,8 @@ bool Engine::handle(const std::string& line) {
 
     if (cmd == "uci") {
         send("id name " + std::string(ENGINE_NAME) + "\nid author Jayshil\n"
-             "option name Hash type spin default 16 min 1 max 4096\nuciok");
+             "option name Hash type spin default 16 min 1 max 4096\n"
+             "option name EvalFile type string default <empty>\nuciok");
     } else if (cmd == "isready") {
         send("readyok");
     } else if (cmd == "ucinewgame") {
@@ -110,6 +112,9 @@ bool Engine::handle(const std::string& line) {
     } else if (cmd == "setoption") {
         wait();
         cmd_setoption(is);
+    } else if (cmd == "eval") {
+        send("Evaluation: " + std::to_string(eval::evaluate(m_pos)) + " (side to move, " +
+             (nnue::active() ? "nnue" : "classical") + ")");
     } else if (cmd == "d") {
         send("Fen: " + fen::to_string(m_pos));
     } else if (cmd == "perft") {
@@ -218,10 +223,18 @@ void Engine::cmd_setoption(std::istream& is) {
     while (is >> tok && tok != "value") {
         if (tok != "name") name += (name.empty() ? "" : " ") + tok;
     }
-    is >> value;
+    std::getline(is >> std::ws, value);  // Paths may contain spaces
+    if (value == "<empty>") value.clear();
 
     if (name == "Hash") {
         m_searcher.tt().resize(static_cast<size_t>(std::clamp(std::atoi(value.c_str()), 1, 4096)));
+    } else if (name == "EvalFile") {
+        if (nnue::load(value)) {
+            m_pos.refresh();
+            send(value.empty() ? "info string using classical evaluation" : "info string loaded network " + value);
+        } else {
+            send("info string failed to load network: " + value);
+        }
     } else {
         send("info string unknown option: " + name);
     }

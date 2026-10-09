@@ -3,6 +3,7 @@
 #include "board/types.h"
 #include "board/bitboard.h"
 #include "move/move.h"
+#include "evaluation/nnue.h"
 #include "evaluation/psqt.h"
 #include <array>
 #include <vector>
@@ -77,6 +78,9 @@ public:
     [[nodiscard]] int psq_mg() const noexcept { return m_psq_mg; }
     [[nodiscard]] int psq_eg() const noexcept { return m_psq_eg; }
     [[nodiscard]] int phase() const noexcept { return m_phase; }
+    [[nodiscard]] const nnue::Accumulator& accumulator(Color perspective) const noexcept {
+        return m_acc[static_cast<size_t>(perspective)];
+    }
 
     void set_side_to_move(Color c) noexcept { m_side_to_move = c; }
     void set_castling_rights(uint8_t cr) noexcept { m_castling_rights = cr; }
@@ -112,6 +116,9 @@ public:
 
     bool operator==(const Position& other) const noexcept;
 
+    // Rebuilds derived state (mailbox, evaluation totals, accumulators), e.g. after loading a network
+    void refresh() noexcept { update_occupancies(); }
+
 private:
     void update_occupancies() noexcept;
     void update_psq(Piece p, Square sq, int sign) noexcept {
@@ -119,7 +126,10 @@ private:
         m_psq_mg += sign * s.mg;
         m_psq_eg += sign * s.eg;
         m_phase += sign * eval::phase_weight(p);
+        if (const nnue::Network* net = nnue::active()) update_accumulators(*net, p, sq, sign);
     }
+    void update_accumulators(const nnue::Network& net, Piece p, Square sq, int sign) noexcept;
+    void reset_accumulators() noexcept;
 
     std::array<Bitboard, NUM_PIECES> m_pieces{};
     std::array<Piece, NUM_SQUARES> m_board{};
@@ -136,6 +146,7 @@ private:
     int m_psq_mg{0};
     int m_psq_eg{0};
     int m_phase{0};
+    std::array<nnue::Accumulator, NUM_COLORS> m_acc{};
 
     std::vector<UndoState> m_history{};
 };

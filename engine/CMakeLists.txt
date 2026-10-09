@@ -15,6 +15,7 @@ add_library(chess_core STATIC
     src/board/types.cpp
     src/board/zobrist.cpp
     src/evaluation/evaluate.cpp
+    src/evaluation/nnue.cpp
     src/move/attacks.cpp
     src/move/move.cpp
     src/move/movegen.cpp
@@ -73,6 +74,7 @@ if(BUILD_TESTING)
         tests/unit/test_make_unmake.cpp
         tests/unit/test_move.cpp
         tests/unit/test_movegen.cpp
+        tests/unit/test_nnue.cpp
         tests/unit/test_position.cpp
         tests/unit/test_search.cpp
         tests/unit/test_tt.cpp

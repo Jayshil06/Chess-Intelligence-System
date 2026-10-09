@@ -3,13 +3,13 @@
 [![C++23](https://img.shields.io/badge/C%2B%2B-23-blue.svg?style=flat-square&logo=c%2B%2B)](https://en.cppreference.com/w/cpp/23)
 [![CMake](https://img.shields.io/badge/CMake-3.25%2B-064F8C.svg?style=flat-square&logo=cmake)](https://cmake.org/)
 [![CI](https://github.com/Jayshil06/Chess-Intelligence-System/actions/workflows/ci.yml/badge.svg)](https://github.com/Jayshil06/Chess-Intelligence-System/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Tests-122%2F122%20Passing-brightgreen.svg?style=flat-square)](./engine/tests)
+[![Tests](https://img.shields.io/badge/Tests-128%2F128%20Passing-brightgreen.svg?style=flat-square)](./engine/tests)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](./LICENSE)
 
 A chess intelligence platform built around a **perft-verified C++23 bitboard engine** that speaks UCI.
-The engine tier and the Python platform (PGN ingestion, features, analytics, classical ML baselines, and
-self-play/Elo/SPRT) are implemented and tested. NNUE training, the API, and the dashboard are designed and
-scaffolded, and are being built next (see the [roadmap](#️-implementation-roadmap)).
+The engine tier and the Python platform (PGN ingestion, features, analytics, classical ML baselines,
+self-play/Elo/SPRT, and an NNUE training pipeline with C++ inference) are implemented and tested. The API
+and the dashboard are designed and scaffolded, and are being built next (see the [roadmap](#️-implementation-roadmap)).
 
 ---
 
@@ -21,14 +21,13 @@ scaffolded, and are being built next (see the [roadmap](#️-implementation-road
                      +--------------------+--------------------+
                      |                                         |
                      v                                         v
-         C++ ENGINE CORE  [built]              PYTHON PLATFORM  [in progress]
+         C++ ENGINE CORE  [built]                  PYTHON PLATFORM  [built]
                      |                                         |
              +-------+--------+                    +-----------+-----------+
              |       |        |                    |           |           |
            Board   Search    UCI                 Data       Analytics      ML
              |       |        |                Pipeline       |           |
-             |       |        |               [built]      [built]    [baselines built,
-             |       |        |                                        NNUE planned]
+             |       |        |               [built]      [built]       [built]
          Bitboard   PVS      Engine               PGN        EDA        PyTorch
          Mailbox    TT       Thread             Features    Stats        NNUE
              |       |        |                    |           |           |
@@ -54,19 +53,19 @@ scaffolded, and are being built next (see the [roadmap](#️-implementation-road
 - Move ordering: TT move, MVV-LVA captures, killer moves, and history heuristic.
 - Draw detection: threefold repetition, fifty-move rule, and insufficient material.
 - Tapered material + piece-square evaluation, updated incrementally on every move.
+- Optional NNUE evaluation (768 inputs per side, 2x128, 32, 1) loaded with `setoption name EvalFile`. The int16 first layer is updated incrementally and exactly on every move; the classical evaluation stays the default.
 - UCI protocol with a threaded, interruptible search, clock-based time management, and `bench`/`perft` commands.
 
 ### ✅ Built: Python Data Platform (`python/`)
-- **`chess_data`**: streaming PGN ingestion (plain, `.gz`, `.bz2`, `.zst`) at constant memory. Rejects games with illegal moves, variants, missing results, or players below an Elo floor, and writes one Parquet row per position.
+- **`chess_data`**: streaming PGN ingestion (plain, `.gz`, `.bz2`, `.zst`) at constant memory. Rejects games with illegal moves, variants, missing results, or players below an Elo floor, and writes one Parquet row per position. `chess-label` adds engine evaluations as training targets, using several engine processes in parallel.
 - **`features`**: deterministic features per position (material, bishop pair, mobility, centre control, doubled/isolated/passed pawns, king shield and king-zone attacks, phase), streamed Parquet to Parquet.
 - **`selfplay`**: UCI engine matches with paired openings and real clocks (time forfeits and illegal moves are scored). Reports Elo with a 95% confidence interval and stops early on an SPRT decision.
 - **`analytics`**: DuckDB reports for opening results, Elo calibration (actual vs expected score), player tendencies, and feature/result correlation, plus engine-based blunder detection by centipawn loss.
-- **`models`**: result-prediction baselines (constant, ridge regression, random forest, MLP, XGBoost) trained on a game-grouped split so positions from one game never leak across train and test.
+- **`models`**: result-prediction baselines (constant, ridge regression, random forest, MLP, XGBoost) trained on a game-grouped split so positions from one game never leak across train and test. `chess-nnue` trains the NNUE in PyTorch, reports loss against constant and material baselines, and exports the quantized network file the engine loads.
 - **`experiments`**: every training run is recorded as JSON with parameters, metrics, git commit, and Python version.
 
-### 🗓️ Planned (scaffolding only today)
-- **NNUE (`python/models`, engine)**: engine-labelled training data, PyTorch NNUE training, and C++ inference in the engine.
-- **NNUE inference in the engine**: not started.
+### 🗓️ Not done yet
+- **NNUE strength**: the training and inference pipeline is complete, but a trained network has not yet been measured against the classical evaluation in an SPRT match.
 - **FastAPI service (`api/`)**: engine-backed REST endpoints for evaluation, best move, and blunder detection. Currently a package stub.
 - **React dashboard (`dashboard/`)**: interactive board, evaluation graph, and PV stream. Currently `package.json` only.
 
@@ -112,7 +111,7 @@ cmake -B build_native -G Ninja -DCHESS_NATIVE=ON
 GoogleTest is downloaded over verified TLS and pinned by SHA-256. Behind a TLS-intercepting proxy,
 point CMake at your CA bundle with `-DCMAKE_CA_FILE=/path/to/ca.pem`; do not disable verification.
 
-#### 2. Run the Test Suite (122 Tests)
+#### 2. Run the Test Suite (128 Tests)
 ```bash
 ctest --test-dir build_release --output-on-failure
 ```
@@ -125,8 +124,9 @@ uci
 position startpos moves e2e4 e7e5
 go movetime 1000        # also: depth N, nodes N, wtime/btime/winc/binc/movestogo, infinite
 ```
-Extra commands: `d` (print FEN), `perft <depth>` (move-by-move node counts), `bench [depth]`,
-and `setoption name Hash value <MB>`.
+Extra commands: `d` (print FEN), `eval` (static evaluation), `perft <depth>` (move-by-move node counts),
+`bench [depth]`, `setoption name Hash value <MB>`, and `setoption name EvalFile value <file.nnue>`
+(`<empty>` switches back to the classical evaluation).
 
 #### 4. Benchmark and Perft Gate
 ```bash
@@ -140,6 +140,7 @@ Measured before/after numbers are recorded in [`engine/bench/BASELINE.md`](engin
 ```bash
 python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -e "python[dev,zstd]"
+pip install torch                                       # only needed for NNUE training
 python python/run_tests.py                              # match tests use the engine if it is built
 
 chess-ingest games.pgn.zst positions.parquet --min-elo 2000 --skip-plies 8
@@ -148,6 +149,12 @@ chess-match ./new_engine ./base_engine --games 400 --tc 10+0.1 --sprt 0 5 --pgn 
 chess-analytics positions.parquet --features features.parquet
 chess-blunders games.pgn ./build_release/engine/chess_engine --depth 8 --threshold 200
 chess-train features.parquet                            # records a run in experiments/runs/
+
+# NNUE: label positions with the engine, train, then load the network into the engine
+chess-label positions.parquet labelled.parquet ./build_release/engine/chess_engine --depth 6 --workers 8
+chess-nnue labelled.parquet net.nnue --epochs 20
+chess-match ./build_release/engine/chess_engine ./build_release/engine/chess_engine \
+    --option1 EvalFile=net.nnue --games 400 --tc 10+0.1 --sprt 0 5
 ```
 Ingestion runs at roughly 220 games/s and feature extraction at roughly 11K positions/s on one core.
 
@@ -163,7 +170,8 @@ Ingestion runs at roughly 220 games/s and feature extraction at roughly 11K posi
 - [ ] **Steps 26–34 — Python Data Platform, ML Baselines & PyTorch NNUE**: PGN pipeline, feature engineering, analytics, ML baselines, and NNUE training.
   - [x] PGN ingestion pipeline, feature engineering, and self-play/Elo/SPRT harness (moved ahead of ML so every engine change can be measured)
   - [x] Analytics (openings, Elo calibration, players, blunders), classical ML baselines, experiment tracking
-  - [ ] Engine-labelled data and PyTorch NNUE training
+  - [x] Engine-labelled data, PyTorch NNUE training, and C++ NNUE inference in the engine
+  - [ ] Train a network on a large dataset and confirm it beats the classical evaluation by SPRT
 - [ ] **Steps 35–38 — FastAPI Service, React Dashboard & Portfolio Release**: Web microservice, interactive UI, self-play ELO evaluation, and portfolio release.
 
 ---

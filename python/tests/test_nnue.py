@@ -1,3 +1,4 @@
+import copy
 import random
 import re
 import subprocess
@@ -18,7 +19,7 @@ except ImportError as exc:  # The ml extra is optional
 from test_selfplay import find_engine, require_engine
 
 from chess_data.label import EVAL_CLIP, label
-from models.nnue import NNUE, NUM_FEATURES, PAD, encode, encode_fens, export, feature_index, predict_cp, train
+from models.nnue import NNUE, NUM_FEATURES, PAD, QA, encode, encode_fens, export, feature_index, predict_cp, train
 
 
 def random_positions(count: int, seed: int = 0) -> list[str]:
@@ -95,7 +96,11 @@ class TestExport(unittest.TestCase):
         with torch.no_grad():  # Spread outputs so the comparison is meaningful
             model.out.weight.mul_(20)
         fens = random_positions(12, seed=5)
-        expected = predict_cp(model, fens)
+        quantized = copy.deepcopy(model)  # Same int16 first layer the engine loads
+        with torch.no_grad():
+            quantized.ft.weight.copy_(torch.round(quantized.ft.weight * QA) / QA)
+            quantized.ft_bias.copy_(torch.round(quantized.ft_bias * QA) / QA)
+        expected = predict_cp(quantized, fens)
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "net with space.nnue"
             export(model, path)
@@ -109,7 +114,7 @@ class TestExport(unittest.TestCase):
         self.assertEqual(len(got), len(fens))
         self.assertGreater(float(np.std(expected)), 20)
         for fen, py, cpp in zip(fens, expected, got, strict=True):
-            self.assertAlmostEqual(cpp, py, delta=4, msg=fen)  # int16 quantization of the first layer
+            self.assertAlmostEqual(cpp, py, delta=1, msg=fen)  # Only float rounding remains
 
 
 @unittest.skipUnless(find_engine(), "build the engine or set CHESS_ENGINE to run labelling tests")

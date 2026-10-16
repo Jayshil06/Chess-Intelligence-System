@@ -48,8 +48,8 @@ include = ["chess_data*", "features*", "analytics*", "models*", "experiments*", 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-# python-chess uses an asyncio API that Python 3.14 deprecates; not actionable here
-filterwarnings = ["ignore:'asyncio.DefaultEventLoopPolicy' is deprecated:DeprecationWarning:chess.engine"]
+# python-chess uses asyncio APIs that Python 3.14 deprecates; not actionable in this project
+filterwarnings = ["ignore::DeprecationWarning:chess.engine"]
 
 [tool.ruff]
 line-length = 120

@@ -3,13 +3,13 @@
 [![C++23](https://img.shields.io/badge/C%2B%2B-23-blue.svg?style=flat-square&logo=c%2B%2B)](https://en.cppreference.com/w/cpp/23)
 [![CMake](https://img.shields.io/badge/CMake-3.25%2B-064F8C.svg?style=flat-square&logo=cmake)](https://cmake.org/)
 [![CI](https://github.com/Jayshil06/Chess-Intelligence-System/actions/workflows/ci.yml/badge.svg)](https://github.com/Jayshil06/Chess-Intelligence-System/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Tests-128%2F128%20Passing-brightgreen.svg?style=flat-square)](./engine/tests)
+[![Tests](https://img.shields.io/badge/Tests-184%20Passing-brightgreen.svg?style=flat-square)](./.github/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](./LICENSE)
 
 A chess intelligence platform built around a **perft-verified C++23 bitboard engine** that speaks UCI.
-The engine tier and the Python platform (PGN ingestion, features, analytics, classical ML baselines,
-self-play/Elo/SPRT, and an NNUE training pipeline with C++ inference) are implemented and tested. The API
-and the dashboard are designed and scaffolded, and are being built next (see the [roadmap](#️-implementation-roadmap)).
+The engine, the Python platform (PGN ingestion, features, analytics, classical ML baselines,
+self-play/Elo/SPRT, and an NNUE training pipeline with C++ inference), a FastAPI service, and a web app for
+playing and analysing games against the engine are implemented and tested (see the [roadmap](#️-implementation-roadmap)).
 
 ---
 
@@ -39,10 +39,10 @@ and the dashboard are designed and scaffolded, and are being built next (see the
                              SELF-PLAY / ELO  [built]
                                         |
                                         v
-                             FASTAPI SERVICE  [planned]
+                             FASTAPI SERVICE  [built]
                                         |
                                         v
-                          REACT / TYPESCRIPT UI  [planned]
+                          REACT / TYPESCRIPT UI  [built]
 ```
 
 ### ✅ Built: C++ Engine Core (`engine/`)
@@ -64,10 +64,21 @@ and the dashboard are designed and scaffolded, and are being built next (see the
 - **`models`**: result-prediction baselines (constant, ridge regression, random forest, MLP, XGBoost) trained on a game-grouped split so positions from one game never leak across train and test. `chess-nnue` trains the NNUE in PyTorch, reports loss against constant and material baselines, and exports the quantized network file the engine loads.
 - **`experiments`**: every training run is recorded as JSON with parameters, metrics, git commit, and Python version.
 
+### ✅ Built: FastAPI Service (`api/`)
+- Games against the engine: create (either colour, 8 strength levels, optional starting FEN), move, undo, resign, and PGN export. Every move is validated server-side.
+- Position analysis: evaluation, best move, and principal variation, time-bounded so requests stay responsive.
+- One shared UCI engine process; also serves the built web app, so a single command runs everything.
+
+### ✅ Built: Web App (`dashboard/`)
+React + TypeScript (Vite) with five pages:
+- **Play**: drag or click to move with legal-move hints, promotion picker, evaluation bar, move list, hint, undo, resign, flip, and PGN copy. Each game has its own URL.
+- **Analysis**: free board for both sides, FEN loading, live engine evaluation with best-move arrow and main line, and "play from here".
+- **Games**: replay every game from the session move by move (buttons or arrow keys) and download PGN.
+- **Engine** and **Home**: engine status, strength levels, and how the engine works.
+
 ### 🗓️ Not done yet
-- **NNUE strength**: the training and inference pipeline is complete, but a trained network has not yet been measured against the classical evaluation in an SPRT match.
-- **FastAPI service (`api/`)**: engine-backed REST endpoints for evaluation, best move, and blunder detection. Currently a package stub.
-- **React dashboard (`dashboard/`)**: interactive board, evaluation graph, and PV stream. Currently `package.json` only.
+- **NNUE strength**: the training and inference pipeline is complete, but a network trained on a large dataset has not yet been shown to beat the classical evaluation in an SPRT match.
+- **Persistence**: games live in server memory and are lost when the API restarts.
 
 ---
 
@@ -76,7 +87,7 @@ and the dashboard are designed and scaffolded, and are being built next (see the
 ```text
 Chess-Intelligence-System/
 ├── CMakeLists.txt           # Root CMake configuration
-├── .github/workflows/ci.yml # CI: Release build + tests + perft gate, ASan/UBSan job
+├── .github/workflows/ci.yml # CI: engine + perft gate, Python + API tests, web app build, ASan/UBSan
 │
 ├── engine/                  # C++23 chess engine  [built]
 │   ├── CMakeLists.txt       # chess_core library, chess_engine, chess_bench, chess_tests
@@ -86,8 +97,8 @@ Chess-Intelligence-System/
 │   └── tests/               # GoogleTest suite: unit/, perft/, search/
 │
 ├── python/                  # chess_data, features, analytics, models, experiments, selfplay [built]
-├── api/                     # FastAPI service      [planned, package stub]
-└── dashboard/               # React + TypeScript   [planned, package.json only]
+├── api/                     # FastAPI service: games, analysis, serves the web app  [built]
+└── dashboard/               # React + TypeScript web app (Vite)                     [built]
 ```
 
 ---
@@ -97,6 +108,20 @@ Chess-Intelligence-System/
 ### Prerequisites
 - **C++ Compiler**: C++23 compliant (GCC 14+, Clang 17+, or MSVC 2022+)
 - **Build System**: CMake 3.25+ and Ninja
+- **Python**: 3.12+ (data platform and API)
+- **Node.js**: 24+ (web app)
+
+### Quick Start: Play in the Browser
+```bash
+cmake -B build_release -G Ninja && cmake --build build_release   # build the engine
+python -m venv .venv && source .venv/bin/activate               # Windows: .venv\Scripts\activate
+pip install -e api
+cd dashboard && npm ci && npm run build && cd ..                 # build the web app
+cd api && uvicorn app.main:app --port 8000                       # open http://127.0.0.1:8000
+```
+The API finds the engine in `build_release/` automatically; set `CHESS_ENGINE=/path/to/chess_engine` to use
+another binary, and `CHESS_EVALFILE=net.nnue` to play with an NNUE network. For UI development, run
+`npm run dev` in `dashboard/` (it proxies `/api` to port 8000) alongside uvicorn.
 
 ### Building and Testing the C++ Engine
 
@@ -173,6 +198,10 @@ Ingestion runs at roughly 220 games/s and feature extraction at roughly 11K posi
   - [x] Engine-labelled data, PyTorch NNUE training, and C++ NNUE inference in the engine
   - [ ] Train a network on a large dataset and confirm it beats the classical evaluation by SPRT
 - [ ] **Steps 35–38 — FastAPI Service, React Dashboard & Portfolio Release**: Web microservice, interactive UI, self-play ELO evaluation, and portfolio release.
+  - [x] FastAPI service for games and analysis, with tests against the real engine
+  - [x] Multi-page web app to play, analyse, and replay games against the engine
+  - [x] Self-play Elo/SPRT harness (built earlier, in Steps 26–34)
+  - [ ] Portfolio release: deploy, persist games, and publish a strength-tested build
 
 ---
 

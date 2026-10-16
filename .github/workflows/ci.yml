@@ -17,15 +17,34 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install torch --index-url https://download.pytorch.org/whl/cpu
-      - run: pip install -e "python[dev,zstd]"
+      - run: pip install -e "python[dev,zstd]" -e "api[dev]"
       - name: Lint and type-check Python
         run: |
           ruff check python
+          ruff check api --config api/pyproject.toml
           basedpyright --pythonpath "$(which python)"
-      - name: Python platform tests (match tests use the engine built above)
-        run: python python/run_tests.py
+      - name: Python platform and API tests (both use the engine built above)
+        run: |
+          python python/run_tests.py
+          cd api && python -m pytest -q
         env:
-          CHESS_ENGINE: build/engine/chess_engine
+          CHESS_ENGINE: ${{ github.workspace }}/build/engine/chess_engine
+
+  dashboard:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: dashboard
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
 
   sanitizers:
     runs-on: ubuntu-24.04

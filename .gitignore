@@ -76,3 +76,6 @@ Thumbs.db
 CODING_AGENT_*.md
 PROJECT_SPEC*.md
 AGENTS.md
+
+# Node
+node_modules/

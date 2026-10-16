@@ -46,7 +46,7 @@ def make_models(seed: int = 0) -> dict:
                                                             max_iter=200, random_state=seed)),
     }
     try:
-        from xgboost import XGBRegressor
+        from xgboost import XGBRegressor  # pyright: ignore[reportMissingImports]  # optional ml extra
 
         models["xgboost"] = XGBRegressor(n_estimators=400, max_depth=6, learning_rate=0.05,
                                          subsample=0.8, colsample_bytree=0.8, random_state=seed)

@@ -1,19 +1,14 @@
 import { Chess } from 'chess.js';
 import { Check, Copy, Flag, Lightbulb, LoaderCircle, Plus, Repeat, Shuffle, Undo2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type { Arrow } from 'react-chessboard';
+import type { ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import { api } from '../api.ts';
+import { api, errorText } from '../api.ts';
 import type { Color, GameState } from '../api.ts';
-import { statusText } from '../chess-utils.ts';
+import { bestMoveArrow, LEVEL_NAMES, statusText } from '../chess-utils.ts';
 import { Board } from '../components/Board.tsx';
 import { EvalBar } from '../components/EvalBar.tsx';
 import { MoveList } from '../components/MoveList.tsx';
-
-export const LEVEL_NAMES = ['Beginner', 'Novice', 'Casual', 'Club', 'Strong club', 'Expert', 'Master', 'Maximum'];
-const HINT_COLOR = 'rgba(64, 156, 255, 0.85)';
-
-const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 export function Play() {
   const { gameId } = useParams();
@@ -74,12 +69,11 @@ function NewGamePanel() {
 function GameView({ gameId }: { gameId: number }) {
   const navigate = useNavigate();
   const [game, setGame] = useState<GameState | null>(null);
-  const [pendingFen, setPendingFen] = useState<string | null>(null);
-  const [pendingMove, setPendingMove] = useState<string | null>(null);
-  const [thinking, setThinking] = useState(false);
-  const [hinting, setHinting] = useState(false);
+  // The player's move, shown before the engine's reply arrives
+  const [pending, setPending] = useState<{ fen: string; uci: string } | null>(null);
+  const [busy, setBusy] = useState<'engine' | 'hint' | null>(null);
+  const [hint, setHint] = useState<string | null>(null);
   const [flipped, setFlipped] = useState(false);
-  const [hint, setHint] = useState<Arrow[]>([]);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -111,70 +105,70 @@ function GameView({ gameId }: { gameId: number }) {
 
   const current = game;
   const active = current.status === 'active';
-  const yourTurn = active && current.turn === current.player_color && !thinking;
+  const yourTurn = active && current.turn === current.player_color && !busy;
   const orientation: Color = (current.player_color === 'white') !== flipped ? 'white' : 'black';
 
   async function run(action: () => Promise<GameState>) {
-    setThinking(true);
+    setBusy('engine');
     setError(null);
-    setHint([]);
+    setHint(null);
     try {
       setGame(await action());
     } catch (e) {
       setError(errorText(e));
     } finally {
-      setThinking(false);
-      setPendingFen(null);
-      setPendingMove(null);
+      setBusy(null);
+      setPending(null);
     }
   }
 
   function playMove(uci: string) {
-    // Show the move at once; the engine's reply replaces this position
     const local = new Chess(current.fen);
-    local.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
-    setPendingFen(local.fen());
-    setPendingMove(uci);
+    local.move(uci);
+    setPending({ fen: local.fen(), uci });
     void run(() => api.move(current.id, uci));
   }
 
   async function showHint() {
-    setThinking(true);
-    setHinting(true);
+    setBusy('hint');
     try {
-      const analysis = await api.analyze(current.fen, 500);
-      const best = analysis.best_move?.uci;
-      setHint(best ? [{ startSquare: best.slice(0, 2), endSquare: best.slice(2, 4), color: HINT_COLOR }] : []);
+      setHint((await api.analyze(current.fen, 500)).best_move?.uci ?? null);
     } catch (e) {
       setError(errorText(e));
     } finally {
-      setThinking(false);
-      setHinting(false);
+      setBusy(null);
     }
   }
 
   async function copyPgn() {
-    const pgn = await (await fetch(api.pgnUrl(current.id))).text();
-    await navigator.clipboard.writeText(pgn);
+    await navigator.clipboard.writeText(await api.pgn(current.id));
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }
 
-  const lastMove = pendingMove ?? current.moves.at(-1)?.uci ?? null;
-  const status = statusText(current.status, current.result, current.player_color);
+  let turnText: ReactNode;
+  if (!active) turnText = <strong>{statusText(current.status, current.result, current.player_color)}</strong>;
+  else if (busy) {
+    turnText = (
+      <>
+        <LoaderCircle className="spin" size={16} aria-hidden /> {busy === 'hint' ? 'Finding a hint…' : 'Engine is thinking…'}
+      </>
+    );
+  } else if (yourTurn) turnText = current.in_check ? 'Your move — you are in check!' : 'Your move';
+  else turnText = 'Waiting for the engine';
 
   return (
     <div className="game-layout">
       <div className="board-column">
         <EvalBar score={current.evaluation} orientation={orientation} />
         <Board
-          fen={pendingFen ?? current.fen}
+          fen={pending?.fen ?? current.fen}
           orientation={orientation}
           legalMoves={yourTurn ? current.legal_moves : []}
           onMove={playMove}
-          lastMove={lastMove}
-          inCheck={!pendingFen && current.in_check}
-          arrows={hint}
+          lastMove={pending?.uci ?? current.moves.at(-1)?.uci ?? null}
+          inCheck={!pending && current.in_check}
+          arrows={hint ? [bestMoveArrow(hint)] : []}
         />
       </div>
 
@@ -186,26 +180,13 @@ function GameView({ gameId }: { gameId: number }) {
           </span>
         </div>
 
-        <p className="turn" aria-live="polite">
-          {!active ? (
-            <strong>{status}</strong>
-          ) : thinking ? (
-            <>
-              <LoaderCircle className="spin" size={16} aria-hidden /> {hinting ? 'Finding a hint…' : 'Engine is thinking…'}
-            </>
-          ) : yourTurn ? (
-            current.in_check ? 'Your move — you are in check!' : 'Your move'
-          ) : (
-            'Waiting for the engine'
-          )}
-        </p>
-
+        <p className="turn" aria-live="polite">{turnText}</p>
         {error && <p className="error">{error}</p>}
 
         <MoveList moves={current.moves} startFen={current.start_fen} />
 
         <div className="button-row">
-          <button onClick={() => run(() => api.undo(current.id))} disabled={thinking} title="Take back your last move">
+          <button onClick={() => run(() => api.undo(current.id))} disabled={!!busy} title="Take back your last move">
             <Undo2 size={16} aria-hidden /> Undo
           </button>
           <button onClick={showHint} disabled={!yourTurn} title="Show the engine's suggestion">
@@ -217,7 +198,7 @@ function GameView({ gameId }: { gameId: number }) {
           <button onClick={copyPgn} title="Copy the game as PGN">
             {copied ? <Check size={16} aria-hidden /> : <Copy size={16} aria-hidden />} {copied ? 'Copied' : 'PGN'}
           </button>
-          <button className="danger" onClick={() => run(() => api.resign(current.id))} disabled={!active || thinking}>
+          <button className="danger" onClick={() => run(() => api.resign(current.id))} disabled={!active || !!busy}>
             <Flag size={16} aria-hidden /> Resign
           </button>
         </div>

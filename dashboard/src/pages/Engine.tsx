@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
-import { api } from '../api.ts';
+import { Fragment, useEffect, useState } from 'react';
+import { api, errorText } from '../api.ts';
 import type { EngineInfo } from '../api.ts';
-import { LEVEL_NAMES } from './Play.tsx';
+import { LEVEL_NAMES } from '../chess-utils.ts';
 
 const FEATURES = [
   ['Board', 'Bitboards with a mailbox; slider attacks from PEXT or magic lookup tables. Move generation is verified by perft.'],
@@ -16,7 +16,7 @@ export function Engine() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    api.engine().then(setInfo, (e) => setError(e instanceof Error ? e.message : String(e)));
+    api.engine().then(setInfo, (e) => setError(errorText(e)));
   }, []);
 
   return (
@@ -38,10 +38,10 @@ export function Engine() {
         <h2>How it plays</h2>
         <dl className="facts">
           {FEATURES.map(([term, text]) => (
-            <div key={term} className="fact-row">
+            <Fragment key={term}>
               <dt>{term}</dt>
               <dd>{text}</dd>
-            </div>
+            </Fragment>
           ))}
         </dl>
       </section>

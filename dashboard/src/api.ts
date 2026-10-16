@@ -44,16 +44,10 @@ export interface EngineInfo {
   levels: Record<string, string>;
 }
 
-export class ApiError extends Error {
-  readonly status: number;
+/** A readable message for anything thrown by an API call. */
+export const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-  constructor(status: number, message: string) {
-    super(message);
-    this.status = status;
-  }
-}
-
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function call(path: string, init?: RequestInit): Promise<Response> {
   const response = await fetch(`/api${path}`, {
     ...init,
     headers: { 'Content-Type': 'application/json', ...init?.headers },
@@ -67,10 +61,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     } catch {
       // Keep the status text when the body is not JSON
     }
-    throw new ApiError(response.status, message);
+    throw new Error(message);
   }
-  return (await response.json()) as T;
+  return response;
 }
+
+const request = async <T>(path: string, init?: RequestInit) => (await (await call(path, init)).json()) as T;
 
 const post = <T>(path: string, body?: unknown) =>
   request<T>(path, { method: 'POST', body: body === undefined ? undefined : JSON.stringify(body) });
@@ -84,6 +80,7 @@ export const api = {
   move: (id: number, move: string) => post<GameState>(`/games/${id}/moves`, { move }),
   undo: (id: number) => post<GameState>(`/games/${id}/undo`),
   resign: (id: number) => post<GameState>(`/games/${id}/resign`),
+  pgn: async (id: number) => (await call(`/games/${id}/pgn`)).text(),
   analyze: (fen: string, movetimeMs: number) => post<Analysis>('/analyze', { fen, movetime_ms: movetimeMs }),
   pgnUrl: (id: number) => `/api/games/${id}/pgn`,
 };

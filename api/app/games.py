@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 import chess
 import chess.pgn
 
+from .engine import Score
+
 
 @dataclass
 class Game:
@@ -17,6 +19,7 @@ class Game:
     board: chess.Board
     created: float = field(default_factory=time.time)
     resigned: bool = False
+    evaluation: Score | None = None  # From the engine's last move
 
     @property
     def start_fen(self) -> str:
@@ -39,20 +42,15 @@ class Game:
     def engine_to_move(self) -> bool:
         return not self.is_over and self.board.turn != self.player_color
 
-    def player_moves(self) -> int:
-        start_turn = self.board.root().turn
-        movers = (start_turn if i % 2 == 0 else not start_turn for i in range(len(self.board.move_stack)))
-        return sum(1 for mover in movers if mover == self.player_color)
-
     def undo(self) -> None:
         """Take back the player's last move and any engine reply, so it is the player's turn again."""
-        if self.player_moves() == 0:
+        plies = 2 if self.board.turn == self.player_color else 1
+        if len(self.board.move_stack) < plies:
             raise ValueError("no player move to take back")
-        undone_player_move = False
-        while self.board.move_stack and not (undone_player_move and self.board.turn == self.player_color):
-            undone_player_move |= (not self.board.turn) == self.player_color
+        for _ in range(plies):
             self.board.pop()
         self.resigned = False
+        self.evaluation = None
 
     def pgn(self, engine_name: str) -> str:
         game = chess.pgn.Game.from_board(self.board)
@@ -68,8 +66,7 @@ class GameStore:
         self._games: dict[int, Game] = {}
         self._ids = itertools.count(1)
 
-    def create(self, player_color: chess.Color, level: int, fen: str | None = None) -> Game:
-        board = chess.Board(fen) if fen else chess.Board()
+    def create(self, player_color: chess.Color, level: int, board: chess.Board) -> Game:
         game = Game(next(self._ids), player_color, level, board)
         self._games[game.id] = game
         return game

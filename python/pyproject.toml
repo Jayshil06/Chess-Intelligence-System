@@ -56,3 +56,6 @@ line-length = 120
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM"]
+
+[tool.ruff.lint.isort]
+known-local-folder = ["engine_helpers"]

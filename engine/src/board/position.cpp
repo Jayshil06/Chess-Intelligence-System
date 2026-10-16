@@ -45,11 +45,9 @@ void Position::reset_accumulators() noexcept {
 
 void Position::update_accumulators(const nnue::Network& net, Piece p, Square sq, int sign) noexcept {
     for (Color c : {Color::White, Color::Black}) {
-        const int16_t* w = net.ft_weight.data() + nnue::feature_index(p, sq, c) * static_cast<size_t>(net.hidden);
+        const int16_t* w = net.ft_weight.data() + nnue::feature_index(p, sq, c) * net.hidden;
         auto& acc = m_acc[static_cast<size_t>(c)];
-        for (int i = 0; i < net.hidden; ++i) {
-            acc[static_cast<size_t>(i)] = static_cast<int16_t>(acc[static_cast<size_t>(i)] + sign * w[i]);
-        }
+        for (size_t i = 0; i < net.hidden; ++i) acc[i] = static_cast<int16_t>(acc[i] + sign * w[i]);
     }
 }
 

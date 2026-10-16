@@ -1,7 +1,5 @@
 import math
-import os
 import unittest
-from pathlib import Path
 
 import chess
 import chess.engine
@@ -9,19 +7,7 @@ import chess.engine
 from selfplay.elo import elo_from_score, estimate_elo, expected_score, sprt_bounds, sprt_decision, sprt_llr
 from selfplay.match import DEFAULT_OPENINGS, TimeControl, opening_fen, run_match
 
-REPO = Path(__file__).resolve().parents[2]
-
-
-def find_engine() -> str | None:
-    """CHESS_ENGINE, or a chess_engine binary from a local build directory."""
-    if os.environ.get("CHESS_ENGINE"):
-        return os.environ["CHESS_ENGINE"]
-    for build in ("build_release", "build"):
-        for name in ("chess_engine.exe", "chess_engine"):
-            path = REPO / build / "engine" / name
-            if path.exists():
-                return str(path)
-    return None
+from engine_helpers import require_engine
 
 
 class TestElo(unittest.TestCase):
@@ -57,13 +43,6 @@ class TestMatchSetup(unittest.TestCase):
     def test_time_control_parse(self):
         self.assertEqual(TimeControl.parse("10+0.1"), TimeControl(10.0, 0.1))
         self.assertEqual(TimeControl.parse("60"), TimeControl(60.0, 0.0))
-
-
-def require_engine() -> str:
-    engine = find_engine()
-    if engine is None:
-        raise unittest.SkipTest("build the engine or set CHESS_ENGINE to run engine tests")
-    return engine
 
 
 class TestMatchWithEngine(unittest.TestCase):

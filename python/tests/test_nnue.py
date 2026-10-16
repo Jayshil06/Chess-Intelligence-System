@@ -1,4 +1,3 @@
-import copy
 import random
 import re
 import subprocess
@@ -16,10 +15,21 @@ try:
 except ImportError as exc:  # The ml extra is optional
     raise unittest.SkipTest("torch is not installed") from exc
 
-from test_selfplay import find_engine, require_engine
-
 from chess_data.label import EVAL_CLIP, label
-from models.nnue import NNUE, NUM_FEATURES, PAD, QA, encode, encode_fens, export, feature_index, predict_cp, train
+from models.nnue import (
+    NNUE,
+    NUM_FEATURES,
+    PAD,
+    encode,
+    encode_fens,
+    export,
+    feature_index,
+    predict_cp,
+    quantized,
+    train,
+)
+
+from engine_helpers import require_engine
 
 
 def random_positions(count: int, seed: int = 0) -> list[str]:
@@ -96,11 +106,7 @@ class TestExport(unittest.TestCase):
         with torch.no_grad():  # Spread outputs so the comparison is meaningful
             model.out.weight.mul_(20)
         fens = random_positions(12, seed=5)
-        quantized = copy.deepcopy(model)  # Same int16 first layer the engine loads
-        with torch.no_grad():
-            quantized.ft.weight.copy_(torch.round(quantized.ft.weight * QA) / QA)
-            quantized.ft_bias.copy_(torch.round(quantized.ft_bias * QA) / QA)
-        expected = predict_cp(quantized, fens)
+        expected = predict_cp(quantized(model), fens)
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "net with space.nnue"
             export(model, path)
@@ -117,7 +123,6 @@ class TestExport(unittest.TestCase):
             self.assertAlmostEqual(cpp, py, delta=1, msg=fen)  # Only float rounding remains
 
 
-@unittest.skipUnless(find_engine(), "build the engine or set CHESS_ENGINE to run labelling tests")
 class TestLabel(unittest.TestCase):
     def test_labels_from_side_to_move_view(self):
         fens = [chess.STARTING_FEN,

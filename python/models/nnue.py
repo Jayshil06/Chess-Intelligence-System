@@ -8,6 +8,7 @@ Usage: python -m models.nnue labelled.parquet net.nnue [--epochs 20] [--hidden 1
 from __future__ import annotations
 
 import argparse
+import copy
 import struct
 from collections.abc import Callable
 from pathlib import Path
@@ -17,6 +18,7 @@ import numpy as np
 import pyarrow.parquet as pq
 import torch
 from torch import nn
+from torch.nn import functional as F
 
 from experiments.tracking import record_run
 from features.extract import PIECE_VALUES
@@ -80,9 +82,14 @@ class NNUE(nn.Module):
             self.ft_bias.clamp_(-WEIGHT_CLIP, WEIGHT_CLIP)
 
 
+def cp_to_prob(cp: np.ndarray) -> np.ndarray:
+    """Centipawns to win probability on the network's logistic scale."""
+    return 1.0 / (1.0 + np.exp(-cp / WDL_SCALE))
+
+
 def make_targets(eval_cp: np.ndarray, result: np.ndarray, side_to_move: np.ndarray, lam: float) -> np.ndarray:
     """Blend of the engine eval (as a win probability) and the game result, both for the side to move."""
-    eval_prob = 1.0 / (1.0 + np.exp(-eval_cp / WDL_SCALE))
+    eval_prob = cp_to_prob(eval_cp)
     result_stm = np.where(side_to_move == 0, result, 1.0 - result)
     return (lam * eval_prob + (1.0 - lam) * result_stm).astype(np.float32)
 
@@ -91,13 +98,27 @@ def predict_cp(model: NNUE, fens: list[str]) -> np.ndarray:
     stm, nstm, _ = encode_fens(fens)
     model.eval()
     with torch.no_grad():
-        logits = model(torch.from_numpy(stm.astype(np.int64)), torch.from_numpy(nstm.astype(np.int64)))
+        logits = model(torch.from_numpy(stm).long(), torch.from_numpy(nstm).long())
     return logits.numpy() * WDL_SCALE
 
 
+def quantize(t: torch.Tensor) -> torch.Tensor:
+    """First-layer values as the engine stores them: int16 steps of 1/QA."""
+    return torch.round(t.detach() * QA)
+
+
+def quantized(model: NNUE) -> NNUE:
+    """Copy of the model whose first layer matches what the engine loads from the exported file."""
+    result = copy.deepcopy(model)
+    with torch.no_grad():
+        result.ft.weight.copy_(quantize(result.ft.weight) / QA)
+        result.ft_bias.copy_(quantize(result.ft_bias) / QA)
+    return result
+
+
 def export(model: NNUE, path: str | Path) -> None:
-    def quantize(t: torch.Tensor) -> bytes:
-        return torch.round(t.detach() * QA).numpy().astype("<i2").tobytes()
+    def int16s(t: torch.Tensor) -> bytes:
+        return quantize(t).numpy().astype("<i2").tobytes()
 
     def floats(t: torch.Tensor) -> bytes:
         return t.detach().numpy().astype("<f4").tobytes()
@@ -105,8 +126,8 @@ def export(model: NNUE, path: str | Path) -> None:
     with open(path, "wb") as f:
         f.write(b"CINN")
         f.write(struct.pack("<3I", 1, model.hidden, model.l1_size))
-        f.write(quantize(model.ft.weight[:NUM_FEATURES]))
-        f.write(quantize(model.ft_bias))
+        f.write(int16s(model.ft.weight[:NUM_FEATURES]))
+        f.write(int16s(model.ft_bias))
         f.write(floats(model.l1.weight))
         f.write(floats(model.l1.bias))
         f.write(floats(model.out.weight.reshape(-1)))
@@ -126,7 +147,7 @@ def train(path: str | Path, *, hidden: int = 128, l1: int = 32, epochs: int = 20
     stm_np, nstm_np, material = encode_fens(table.column("fen").to_pylist())
     train_idx, val_idx = split_by_game(table.column("game_id").to_numpy(), test_size, seed)
 
-    stm, nstm = torch.from_numpy(stm_np.astype(np.int64)), torch.from_numpy(nstm_np.astype(np.int64))
+    stm, nstm = torch.from_numpy(stm_np), torch.from_numpy(nstm_np)  # int16; converted per batch
     y = torch.from_numpy(targets)
     model = NNUE(hidden, l1)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
@@ -136,8 +157,8 @@ def train(path: str | Path, *, hidden: int = 128, l1: int = 32, epochs: int = 20
     def val_metrics() -> tuple[float, float]:
         model.eval()
         with torch.no_grad():
-            logits = model(stm[val], nstm[val])
-            loss = torch.mean((torch.sigmoid(logits) - y[val]) ** 2).item()
+            logits = model(stm[val].long(), nstm[val].long())
+            loss = F.mse_loss(torch.sigmoid(logits), y[val]).item()
         mae = float(np.mean(np.abs(logits.numpy() * WDL_SCALE - eval_cp[val_idx])))
         return loss, mae
 
@@ -148,7 +169,7 @@ def train(path: str | Path, *, hidden: int = 128, l1: int = 32, epochs: int = 20
         total = 0.0
         for start in range(0, len(order), batch_size):
             batch = torch.from_numpy(order[start:start + batch_size])
-            loss = torch.mean((torch.sigmoid(model(stm[batch], nstm[batch])) - y[batch]) ** 2)
+            loss = F.mse_loss(torch.sigmoid(model(stm[batch].long(), nstm[batch].long())), y[batch])
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -161,7 +182,7 @@ def train(path: str | Path, *, hidden: int = 128, l1: int = 32, epochs: int = 20
 
     # References on the same validation positions: always 0.5, and material balance alone
     y_val = targets[val_idx]
-    material_prob = 1.0 / (1.0 + np.exp(-material[val_idx] / WDL_SCALE))
+    material_prob = cp_to_prob(material[val_idx])
     metrics = {
         "positions": int(len(targets)),
         "train_loss": train_loss,

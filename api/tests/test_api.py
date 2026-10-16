@@ -58,6 +58,7 @@ class ApiTest(unittest.TestCase):
         url = f"/api/games/{game['id']}/moves"
         self.assertEqual(self.client.post(url, json={"move": "e2e5"}).status_code, 400)
         self.assertEqual(self.client.post(url, json={"move": "nonsense"}).status_code, 400)
+        self.assertEqual(self.client.post(url, json={"move": "0000"}).status_code, 400)
         self.assertEqual(self.client.post("/api/games/9999/moves", json={"move": "e2e4"}).status_code, 404)
         self.assertEqual(self.client.post("/api/games", json={"level": 9}).status_code, 422)
 

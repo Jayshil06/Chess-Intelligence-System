@@ -1,13 +1,12 @@
 import { Chess } from 'chess.js';
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Download, Play } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import { api } from '../api.ts';
+import { api, errorText } from '../api.ts';
 import type { GameState } from '../api.ts';
-import { statusText } from '../chess-utils.ts';
+import { LEVEL_NAMES, statusText } from '../chess-utils.ts';
 import { Board } from '../components/Board.tsx';
 import { MoveList } from '../components/MoveList.tsx';
-import { LEVEL_NAMES } from './Play.tsx';
 
 export function Games() {
   const { gameId } = useParams();
@@ -16,7 +15,7 @@ export function Games() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    api.listGames().then(setGames, (e) => setError(e instanceof Error ? e.message : String(e)));
+    api.listGames().then(setGames, (e) => setError(errorText(e)));
   }, []);
 
   const selected = games?.find((g) => g.id === Number(gameId)) ?? null;
@@ -56,32 +55,40 @@ export function Games() {
 }
 
 function Replay({ game }: { game: GameState }) {
-  const [ply, setPly] = useState(game.moves.length);
-  const clamp = (p: number) => Math.max(0, Math.min(game.moves.length, p));
+  const last = game.moves.length;
+  const [ply, setPly] = useState(last);
+
+  // Every position of the game, computed once instead of replaying moves on each step
+  const positions = useMemo(() => {
+    const chess = new Chess(game.start_fen);
+    const result = [{ fen: chess.fen(), inCheck: chess.inCheck() }];
+    for (const move of game.moves) {
+      chess.move(move.uci);
+      result.push({ fen: chess.fen(), inCheck: chess.inCheck() });
+    }
+    return result;
+  }, [game]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowLeft') setPly((p) => clamp(p - 1));
-      if (e.key === 'ArrowRight') setPly((p) => clamp(p + 1));
+      if (e.key === 'ArrowLeft') setPly((p) => Math.max(0, p - 1));
+      if (e.key === 'ArrowRight') setPly((p) => Math.min(last, p + 1));
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  });
+  }, [last]);
 
-  const chess = new Chess(game.start_fen);
-  for (const move of game.moves.slice(0, ply)) {
-    chess.move({ from: move.uci.slice(0, 2), to: move.uci.slice(2, 4), promotion: move.uci[4] });
-  }
+  const { fen, inCheck } = positions[ply];
 
   return (
-    <div className="game-layout replay">
+    <div className="game-layout">
       <div className="board-column">
         <Board
-          fen={chess.fen()}
+          fen={fen}
           orientation={game.player_color}
           legalMoves={[]}
           lastMove={ply > 0 ? game.moves[ply - 1].uci : null}
-          inCheck={chess.inCheck()}
+          inCheck={inCheck}
         />
       </div>
       <aside className="panel side">
@@ -94,10 +101,10 @@ function Replay({ game }: { game: GameState }) {
         </p>
         <div className="button-row replay-controls" role="group" aria-label="Replay controls">
           <button onClick={() => setPly(0)} disabled={ply === 0} aria-label="First move"><ChevronsLeft size={18} /></button>
-          <button onClick={() => setPly(clamp(ply - 1))} disabled={ply === 0} aria-label="Previous move"><ChevronLeft size={18} /></button>
-          <span className="ply-counter">{ply} / {game.moves.length}</span>
-          <button onClick={() => setPly(clamp(ply + 1))} disabled={ply === game.moves.length} aria-label="Next move"><ChevronRight size={18} /></button>
-          <button onClick={() => setPly(game.moves.length)} disabled={ply === game.moves.length} aria-label="Last move"><ChevronsRight size={18} /></button>
+          <button onClick={() => setPly(ply - 1)} disabled={ply === 0} aria-label="Previous move"><ChevronLeft size={18} /></button>
+          <span className="ply-counter">{ply} / {last}</span>
+          <button onClick={() => setPly(ply + 1)} disabled={ply === last} aria-label="Next move"><ChevronRight size={18} /></button>
+          <button onClick={() => setPly(last)} disabled={ply === last} aria-label="Last move"><ChevronsRight size={18} /></button>
         </div>
         <MoveList moves={game.moves} startFen={game.start_fen} activePly={ply} onSelectPly={setPly} />
         <div className="button-row">
@@ -109,7 +116,7 @@ function Replay({ game }: { game: GameState }) {
               <Play size={16} aria-hidden /> Continue
             </Link>
           )}
-          <Link className="button" to={`/analysis?fen=${encodeURIComponent(chess.fen())}`}>Analyse this position</Link>
+          <Link className="button" to={`/analysis?fen=${encodeURIComponent(fen)}`}>Analyse this position</Link>
         </div>
       </aside>
     </div>

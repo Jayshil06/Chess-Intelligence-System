@@ -5,12 +5,13 @@ from pathlib import Path
 
 import chess.engine
 import chess.pgn
-from test_selfplay import require_engine
 
 from analytics.blunders import MATE_CP, find_blunders
 from analytics.report import elo_calibration, feature_correlations, opening_stats, player_stats
 from chess_data.ingest import ingest
 from features.extract import featurize
+
+from engine_helpers import require_engine
 
 
 def game_pgn(white: str, black: str, result: str, eco: str, white_elo: int, black_elo: int) -> str:

@@ -16,8 +16,8 @@ using namespace chess;
 namespace {
 
 struct TestNet {
-    int hidden = 8;
-    int l1 = 4;
+    size_t hidden = 8;
+    size_t l1 = 4;
     std::vector<int16_t> ft_weight, ft_bias;
     std::vector<float> l1_weight, l1_bias, out_weight;
     float out_bias = 0.1f;
@@ -28,11 +28,11 @@ TestNet make_net() {
     std::uniform_int_distribution<int> w(-100, 100), b(-50, 150);
     std::uniform_real_distribution<float> f(-0.5f, 0.5f);
     TestNet n;
-    for (int i = 0; i < nnue::NUM_FEATURES * n.hidden; ++i) n.ft_weight.push_back(static_cast<int16_t>(w(rng)));
-    for (int i = 0; i < n.hidden; ++i) n.ft_bias.push_back(static_cast<int16_t>(b(rng)));
-    for (int i = 0; i < n.l1 * 2 * n.hidden; ++i) n.l1_weight.push_back(f(rng));
-    for (int i = 0; i < n.l1; ++i) n.l1_bias.push_back(f(rng));
-    for (int i = 0; i < n.l1; ++i) n.out_weight.push_back(f(rng) * 4);
+    for (size_t i = 0; i < nnue::NUM_FEATURES * n.hidden; ++i) n.ft_weight.push_back(static_cast<int16_t>(w(rng)));
+    for (size_t i = 0; i < n.hidden; ++i) n.ft_bias.push_back(static_cast<int16_t>(b(rng)));
+    for (size_t i = 0; i < n.l1 * 2 * n.hidden; ++i) n.l1_weight.push_back(f(rng));
+    for (size_t i = 0; i < n.l1; ++i) n.l1_bias.push_back(f(rng));
+    for (size_t i = 0; i < n.l1; ++i) n.out_weight.push_back(f(rng) * 4);
     return n;
 }
 
@@ -61,7 +61,8 @@ std::string write_net(const TestNet& n, const char* magic = "CINN", int extra_by
     return path.string();
 }
 
-// Independent forward pass computed from the board, without incremental accumulators
+// Independent forward pass computed from the board, without incremental accumulators.
+// It sums in a different order from the engine, so results may differ by 1 cp of float rounding.
 int reference_eval(const TestNet& n, const Position& pos) {
     std::vector<float> x;
     for (Color persp : {pos.side_to_move(), ~pos.side_to_move()}) {
@@ -70,15 +71,15 @@ int reference_eval(const TestNet& n, const Position& pos) {
             Piece p = pos.piece_at(static_cast<Square>(s));
             if (p == Piece::None) continue;
             size_t idx = nnue::feature_index(p, static_cast<Square>(s), persp);
-            for (int i = 0; i < n.hidden; ++i) acc[static_cast<size_t>(i)] += n.ft_weight[idx * 8 + static_cast<size_t>(i)];
+            for (size_t i = 0; i < n.hidden; ++i) acc[i] += n.ft_weight[idx * n.hidden + i];
         }
         for (int a : acc) x.push_back(static_cast<float>(std::clamp(a, 0, nnue::QA)) / nnue::QA);
     }
     float out = n.out_bias;
-    for (int j = 0; j < n.l1; ++j) {
-        float h = n.l1_bias[static_cast<size_t>(j)];
-        for (int i = 0; i < 2 * n.hidden; ++i) h += n.l1_weight[static_cast<size_t>(j * 2 * n.hidden + i)] * x[static_cast<size_t>(i)];
-        out += n.out_weight[static_cast<size_t>(j)] * std::clamp(h, 0.0f, 1.0f);
+    for (size_t j = 0; j < n.l1; ++j) {
+        float h = n.l1_bias[j];
+        for (size_t i = 0; i < 2 * n.hidden; ++i) h += n.l1_weight[j * 2 * n.hidden + i] * x[i];
+        out += n.out_weight[j] * std::clamp(h, 0.0f, 1.0f);
     }
     return std::clamp(static_cast<int>(std::lround(out * nnue::WDL_SCALE)), -10000, 10000);
 }
@@ -128,7 +129,7 @@ TEST_F(NnueTest, EvaluationMatchesReference) {
                           "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
                           "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 b - - 0 1"}) {
         Position pos = *fen::parse(f);
-        EXPECT_EQ(eval::evaluate(pos), reference_eval(net, pos)) << f;
+        EXPECT_NEAR(eval::evaluate(pos), reference_eval(net, pos), 1) << f;
         Position flip = mirrored(pos);
         EXPECT_EQ(eval::evaluate(flip), eval::evaluate(pos)) << f;
     }
@@ -146,7 +147,7 @@ TEST_F(NnueTest, IncrementalAccumulatorsNeverDrift) {
         undos.emplace_back();
         pos.make_move(moves[rng() % moves.size()], undos.back());
         ASSERT_TRUE(pos.validate_invariants()) << ply;
-        ASSERT_EQ(eval::evaluate(pos), reference_eval(net, pos)) << ply;
+        ASSERT_NEAR(eval::evaluate(pos), reference_eval(net, pos), 1) << ply;
     }
     while (!undos.empty()) {
         pos.unmake_move(undos.back());
@@ -161,7 +162,7 @@ TEST_F(NnueTest, UnloadRestoresClassicalEvaluation) {
     int classical = eval::evaluate(pos);
     ASSERT_TRUE(nnue::load(write_net(net)));
     pos.refresh();
-    EXPECT_EQ(eval::evaluate(pos), reference_eval(net, pos));
+    EXPECT_NEAR(eval::evaluate(pos), reference_eval(net, pos), 1);
     nnue::unload();
     EXPECT_EQ(eval::evaluate(pos), classical);
 }
@@ -176,8 +177,11 @@ TEST_F(NnueTest, UciEvalFileOption) {
     engine.handle("setoption name EvalFile value " + write_net(net));
     engine.handle("eval");
     Position expected = *fen::parse("rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2");
-    EXPECT_NE(out.str().find("Evaluation: " + std::to_string(reference_eval(net, expected)) + " (side to move, nnue)"),
-              std::string::npos);
+    const std::string text = out.str();
+    const size_t at = text.rfind("Evaluation: ");
+    ASSERT_NE(at, std::string::npos);
+    EXPECT_NE(text.find("(side to move, nnue)", at), std::string::npos);
+    EXPECT_NEAR(std::stoi(text.substr(at + 12)), reference_eval(net, expected), 1);
 
     engine.handle("setoption name EvalFile value missing file.nnue");
     EXPECT_NE(out.str().find("failed to load network: missing file.nnue"), std::string::npos);

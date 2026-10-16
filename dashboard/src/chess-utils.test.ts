@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  bestMoveArrow,
   formatScore,
   kingSquare,
   legalTargets,
@@ -61,4 +62,10 @@ test('occupied squares from FEN', () => {
   const occupied = occupiedSquares('6k1/8/8/8/8/8/8/K7 w - - 0 1');
   assert.deepEqual([...occupied].sort(), ['a1', 'g8']);
   assert.equal(occupiedSquares(START).size, 32);
+});
+
+test('best move arrow from UCI', () => {
+  const arrow = bestMoveArrow('e7e8q');
+  assert.equal(arrow.startSquare, 'e7');
+  assert.equal(arrow.endSquare, 'e8');
 });

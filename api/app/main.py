@@ -31,11 +31,6 @@ class MoveOut(BaseModel):
     san: str
 
 
-class ScoreOut(BaseModel):
-    cp: int | None
-    mate: int | None
-
-
 class GameOut(BaseModel):
     id: int
     created: float
@@ -49,7 +44,7 @@ class GameOut(BaseModel):
     result: str | None
     in_check: bool
     legal_moves: list[str]
-    evaluation: ScoreOut | None = None
+    evaluation: Score | None = None
 
 
 class NewGame(BaseModel):
@@ -71,7 +66,7 @@ class AnalyzeRequest(BaseModel):
 class AnalysisOut(BaseModel):
     fen: str
     status: str
-    score: ScoreOut | None
+    score: Score | None
     best_move: MoveOut | None
     pv: list[MoveOut]
     depth: int
@@ -90,10 +85,6 @@ def san_moves(start: chess.Board, moves: list[chess.Move]) -> list[MoveOut]:
     return out
 
 
-def score_out(score: Score | None) -> ScoreOut | None:
-    return ScoreOut(cp=score.cp, mate=score.mate) if score else None
-
-
 def parse_board(fen: str) -> chess.Board:
     try:
         board = chess.Board(fen)
@@ -110,7 +101,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await service.start()
     app.state.engine = service
     app.state.games = GameStore()
-    app.state.evaluations = {}
     yield
     await service.stop()
 
@@ -129,7 +119,7 @@ def get_game(request: Request, game_id: int) -> Game:
     return game
 
 
-def game_out(request: Request, game: Game) -> GameOut:
+def game_out(game: Game) -> GameOut:
     status, result = game.status()
     return GameOut(
         id=game.id,
@@ -143,16 +133,15 @@ def game_out(request: Request, game: Game) -> GameOut:
         status=status,
         result=result,
         in_check=game.board.is_check(),
-        legal_moves=[] if game.is_over else [m.uci() for m in game.board.legal_moves],
-        evaluation=score_out(request.app.state.evaluations.get(game.id)),
+        legal_moves=[] if status != "active" else [m.uci() for m in game.board.legal_moves],
+        evaluation=game.evaluation,
     )
 
 
 async def engine_reply(request: Request, game: Game) -> None:
     if game.engine_to_move:
-        move, score = await engine(request).best_move(game.board, game.level)
+        move, game.evaluation = await engine(request).best_move(game.board, game.level)
         game.board.push(move)
-        request.app.state.evaluations[game.id] = score
 
 
 def describe_limit(limit: chess.engine.Limit) -> str:
@@ -177,22 +166,21 @@ async def engine_info(request: Request) -> dict[str, object]:
 
 @app.post("/api/games", status_code=201)
 async def create_game(request: Request, body: NewGame) -> GameOut:
-    if body.fen is not None:
-        parse_board(body.fen)
+    board = parse_board(body.fen) if body.fen is not None else chess.Board()
     color = chess.WHITE if body.player_color == "white" else chess.BLACK
-    game = request.app.state.games.create(color, body.level, body.fen)
+    game = request.app.state.games.create(color, body.level, board)
     await engine_reply(request, game)
-    return game_out(request, game)
+    return game_out(game)
 
 
 @app.get("/api/games")
 async def list_games(request: Request) -> list[GameOut]:
-    return [game_out(request, game) for game in request.app.state.games.all()]
+    return [game_out(game) for game in request.app.state.games.all()]
 
 
 @app.get("/api/games/{game_id}")
 async def read_game(request: Request, game_id: int) -> GameOut:
-    return game_out(request, get_game(request, game_id))
+    return game_out(get_game(request, game_id))
 
 
 @app.post("/api/games/{game_id}/moves")
@@ -203,14 +191,14 @@ async def play_move(request: Request, game_id: int, body: PlayerMove) -> GameOut
     if game.board.turn != game.player_color:
         raise HTTPException(409, "not your turn")
     try:
-        move = chess.Move.from_uci(body.move)
+        move = game.board.parse_uci(body.move)
     except ValueError as exc:
-        raise HTTPException(400, f"invalid move: {body.move}") from exc
-    if move not in game.board.legal_moves:
+        raise HTTPException(400, f"illegal move: {body.move}") from exc
+    if not move:  # parse_uci accepts the null move "0000"
         raise HTTPException(400, f"illegal move: {body.move}")
     game.board.push(move)
     await engine_reply(request, game)
-    return game_out(request, game)
+    return game_out(game)
 
 
 @app.post("/api/games/{game_id}/undo")
@@ -220,8 +208,7 @@ async def undo_move(request: Request, game_id: int) -> GameOut:
         game.undo()
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from exc
-    request.app.state.evaluations.pop(game.id, None)
-    return game_out(request, game)
+    return game_out(game)
 
 
 @app.post("/api/games/{game_id}/resign")
@@ -230,7 +217,7 @@ async def resign(request: Request, game_id: int) -> GameOut:
     if game.is_over:
         raise HTTPException(409, "game is over")
     game.resigned = True
-    return game_out(request, game)
+    return game_out(game)
 
 
 @app.get("/api/games/{game_id}/pgn", response_class=PlainTextResponse)
@@ -251,7 +238,7 @@ async def analyze(request: Request, body: AnalyzeRequest) -> AnalysisOut:
         limit = chess.engine.Limit(time=(body.movetime_ms or 1000) / 1000)
     result = await engine(request).analyse(board, limit)
     pv = san_moves(board, result.pv)
-    return AnalysisOut(fen=board.fen(), status="active", score=score_out(result.score),
+    return AnalysisOut(fen=board.fen(), status="active", score=result.score,
                        best_move=pv[0] if pv else None, pv=pv, depth=result.depth, nodes=result.nodes)
 
 

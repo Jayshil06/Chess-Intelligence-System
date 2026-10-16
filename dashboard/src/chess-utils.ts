@@ -1,4 +1,12 @@
+import type { Arrow } from 'react-chessboard';
 import type { Color, MoveInfo, Score } from './api.ts';
+
+export const LEVEL_NAMES = ['Beginner', 'Novice', 'Casual', 'Club', 'Strong club', 'Expert', 'Master', 'Maximum'];
+
+/** Board arrow for a suggested UCI move. */
+export function bestMoveArrow(uci: string): Arrow {
+  return { startSquare: uci.slice(0, 2), endSquare: uci.slice(2, 4), color: 'rgba(64, 156, 255, 0.85)' };
+}
 
 /** Destination squares of the legal moves that start on `from`. */
 export function legalTargets(legalMoves: string[], from: string): string[] {
